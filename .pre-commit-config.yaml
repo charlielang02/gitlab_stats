@@ -1,6 +1,6 @@
 # .pre-commit-config.yaml
 fail_fast: false
-exclude: ^gitlab_stats/gitlab_contributions_march_25th\.txt$
+exclude: .*\.txt$
 repos:
   # #-#-#-#-#-# REPOSITORY AND DEPENDENCIES HEALTH: #-#-#-#-#-#
   # #-#-#-#-#-# PRE-COMMIT HEALTH#-#-#-#-#-#

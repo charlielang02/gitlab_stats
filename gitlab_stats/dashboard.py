@@ -11,8 +11,8 @@ st.set_page_config(layout="wide")
 
 st.title("GitLab Contributions Dashboard")
 
-DEFAULT_FILE_PATH = "gitlab_stats/gitlab_contributions_march_25th.txt"
-PLACEHOLDER_FILE_PATH = "gitlab_stats/gitlab_contributions_placeholder.txt"
+DEFAULT_FILE_PATH = "gitlab_contributions_march_25th.txt"
+PLACEHOLDER_FILE_PATH = "doc/gitlab_contributions_placeholder.txt"
 
 file_path = st.text_input(
     "Path to contributions file",

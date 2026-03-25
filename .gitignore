@@ -7,4 +7,4 @@ venv
 *.idea/
 ./venv
 .git/
-/gitlab_stats/gitlab_contributions_march_25th.txt
+/*.txt
