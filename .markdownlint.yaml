@@ -27,3 +27,11 @@ blanks-around-lists:
 blanks-around-headings:
   # Configure rule MD032
   enabled: true
+fenced-code-language:
+  enabled: true
+  allowed_languages:
+    - bash
+    - mermaid
+    - python
+    - powershell
+    - yaml

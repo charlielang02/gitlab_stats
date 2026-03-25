@@ -211,7 +211,7 @@ def _print_summary(metrics, total_metrics):
 
 def main():
     """Run the script to parse the gitlab log and print summary."""
-    file_path = "gitlab_contributions_march_25th.txt"
+    file_path = "../gitlab_contributions.txt"
     metrics, total_metrics = _parse_gitlab_log(file_path)
     _print_summary(metrics, total_metrics)
 
