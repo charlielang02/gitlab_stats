@@ -1,0 +1,29 @@
+# https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+no-trailing-spaces:
+  # Disable rule MD009 (no-trailing-spaces)
+  enabled: true
+commands-show-output:
+  # Disable rule MD014 (commands-show-output)
+  enabled: false
+heading-style:
+  # Configure rule MD003 (heading-style) to use 'atx' (hash) style
+  enabled: true
+  style: "consistent"
+line-length:
+  # Configure rule MD013 (line-length)
+  enabled: true
+  line_length: 120 # Maximum line length
+ul-style:
+  # Configure rule MD004 (ul-style) to use consistent dashes for unordered lists
+  enabled: true
+  style: "consistent"
+no-duplicate-heading:
+  # Configure rule MD024 (no-duplicate-heading) to only check sibling headings
+  enabled: true
+  siblings_only: true
+blanks-around-lists:
+  # Configure rule MD022
+  enabled: true
+blanks-around-headings:
+  # Configure rule MD032
+  enabled: true

@@ -1,0 +1,271 @@
+# .pre-commit-config.yaml
+fail_fast: false
+exclude: ^gitlab_stats/gitlab_contributions_march_25th\.txt$
+repos:
+  # #-#-#-#-#-# REPOSITORY AND DEPENDENCIES HEALTH: #-#-#-#-#-#
+  # #-#-#-#-#-# PRE-COMMIT HEALTH#-#-#-#-#-#
+  - repo: meta
+    hooks:
+      - id: check-hooks-apply
+        name: PRE-COMMIT HEALTH - check-hooks-apply
+        always_run: true
+        stages:
+          - pre-commit
+  - repo: local
+    # #-#-#-#-#-# POETRY HEALTH#-#-#-#-#-#
+
+    hooks:
+      - id: poetry-check
+        name: POETRY HEALTH - Poetry Check # ensures that the lock files exists
+        entry: poetry check --lock --strict # fails with warnings
+        language: system
+        pass_filenames: false # Prevents pre-commit from passing only staged files
+        always_run: true
+        stages:
+          - pre-commit
+      - id: poetry-lock
+        name: POETRY HEALTH - Poetry Lock
+        entry: poetry lock
+        language: system
+        pass_filenames: false # Prevents pre-commit from passing only staged files
+        always_run: true
+        stages:
+          - pre-commit
+      - id: poetry-install
+        name: POETRY HEALTH - Poetry Install
+        # ensures that the installation is appropriate for development:
+
+        entry: poetry install --with dev --with test
+        language: system
+        pass_filenames: false # Prevents pre-commit from passing only staged files
+        always_run: true
+        stages:
+          - pre-commit
+    # #-#-#-#-#-# COMMIT MESSAGE FIXING: #-#-#-#-#-#
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    # #-#-#-#-#-# Basic file hygiene #-#-#-#-#-#
+
+    # #-#-#-#-#-# FILES FIXING: #-#-#-#-#-#
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        name: FILES FIXING - remove trailing-whitespace
+        always_run: true
+        stages:
+          - pre-commit
+      - id: end-of-file-fixer
+        name: FILES FIXING - end-of-file-fixer
+        always_run: true
+        stages:
+          - pre-commit
+      - id: check-merge-conflict
+        name: FILES FIXING - check-merge-conflict
+        always_run: true
+        stages:
+          - pre-commit
+      - id: check-added-large-files
+        name: FILES FIXING - check-added-large-files
+        always_run: true
+        args:
+          - "--maxkb=500"
+        stages:
+          - pre-commit
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.20.0
+    hooks:
+      - id: pyupgrade
+        name: FILES FIXING - upgrade old python syntax to newer syntax
+        always_run: true
+        stages:
+          - pre-commit
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    # #-#-#-#-#-# FILES HEALTH: #-#-#-#-#-#
+
+    rev: v4.5.0
+    hooks:
+      - id: check-ast
+        name: FILES HEALTH - check python
+        files: ^.*\.py$
+        always_run: true
+        stages:
+          - pre-commit
+      - id: check-yaml
+        name: FILES HEALTH - check yaml
+        files: ^.*\.yaml$
+        always_run: true
+        stages:
+          - pre-commit
+      - id: check-toml
+        name: FILES HEALTH - check toml
+        files: ^.*\.toml$
+        always_run: true
+        stages:
+          - pre-commit
+      - id: check-json
+        name: FILES HEALTH - check json
+        files: ^.*\.json$
+        always_run: true
+        stages:
+          - pre-commit
+  - repo: local
+    hooks:
+      - id: toml-sort
+        name: FILES FORMATTING - format toml
+        entry: poetry run toml-sort
+        files: ^.*\.toml$
+        language: system
+        stages:
+          - pre-commit
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: pretty-format-json
+        name: FILES FORMATTING - format json
+        files: ^.*\.json$
+        args:
+          - --autofix
+        always_run: true
+        stages:
+          - pre-commit
+  - repo: https://github.com/google/yamlfmt
+    rev: v0.17.2
+    hooks:
+      - id: yamlfmt
+        name: FILES FORMATTING - format yaml
+        entry: yamlfmt
+        language: golang
+        pass_filenames: false # Prevents pre-commit from passing only staged files
+        always_run: true
+        args:
+          - "."
+        stages:
+          - pre-commit
+  - repo: local
+    hooks:
+      # PYTHON AND JUPYTER NOTEBOOK FORMATTING:
+      # #-#-#-#-#-# Python import sorting #-#-#-#-#-#
+      - id: isort
+        name: FILES FORMATTING - sort python imports
+        entry: poetry run isort
+        language: system
+        types:
+          - python
+        files: ^.*\.py$
+        pass_filenames: false # Prevents pre-commit from passing only staged files
+        args:
+          - "."
+        always_run: true
+        stages:
+          - pre-commit
+      - id: black
+        # #-#-#-#-#-# Local Black Formatter #-#-#-#-#-#
+
+        name: FILES FORMATTING - formatting python files with Black
+        entry: poetry run black
+        language: system
+        pass_filenames: false # Prevents pre-commit from passing only staged files
+        always_run: true
+        args:
+          - "**/*.py" # This tells black to run on the entire repo
+        stages:
+          - pre-commit
+  - repo: https://github.com/hhatto/autopep8
+    rev: v2.3.2
+    hooks:
+      - id: autopep8
+        name: FILES FORMATTING - auto corrections for PEP8
+        files: ^.*\.py$
+        pass_filenames: false # Prevents pre-commit from passing only staged files
+        always_run: true
+        args:
+          - "."
+        stages:
+          - pre-commit
+  - repo: https://github.com/crate-ci/typos
+    # #-#-#-#-#-# SPELLING CHECKS #-#-#-#-#-#
+
+    rev: v1.34.0
+    hooks:
+      - id: typos
+        name: SPELLING CHECKS - typos
+        args:
+          - --write-changes
+          # for ignoring lines add: # spellchecker:disable-line
+        stages:
+          - pre-commit
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        name: SPELLING CHECKS - codespell
+        additional_dependencies:
+          - tomli
+        stages:
+          - pre-commit
+  - repo: local
+    # #-#-#-#-#-# Linters #-#-#-#-#-#
+
+    hooks:
+      - id: ruff-check
+        name: LINTERS - Ruff check fix
+        entry: poetry run ruff check --fix
+        language: system
+        files: ^.*\.py$
+        pass_filenames: false
+        always_run: true
+      - id: pylint-report-and-score-check
+        name: LINTERS - Pylint Report and Score Threshold
+        entry: poetry run python tools/pylint_reporter.py
+        language: system
+        files: ^.*\.py$
+        pass_filenames: false
+        always_run: true
+        stages:
+          - pre-commit
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: "v0.45.0"
+    hooks:
+      - id: markdownlint
+        entry: markdownlint
+        name: LINTERS - markdownlint Report
+        files: ^.*\.md$
+        pass_filenames: false
+        always_run: true
+        args:
+          - "**/*.md"
+          - "-o"
+          - "doc/markdownlint_report.txt"
+          - "--fix"
+        stages:
+          - pre-commit
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.32.0
+    hooks:
+      - id: yamllint
+        name: LINTERS - yamllint
+        entry: yamllint
+        files: ^.*\.yaml$
+        pass_filenames: false
+        always_run: true
+        args:
+          - "."
+          - "--strict"
+          - "--no-warnings"
+          - "-d"
+          - "{rules: {line-length: {max: 120}}}"
+        stages:
+          - pre-commit
+  - repo: local
+    # #-#-#-#-#-# UNIT TESTS:#-#-#-#-#-#
+
+    hooks:
+      - id: pytest
+        name: UNIT TESTS - pytest
+        entry: poetry run pytest test
+        language: system
+        types:
+          - python
+        pass_filenames: false
+        always_run: true
+        stages:
+          - pre-commit
