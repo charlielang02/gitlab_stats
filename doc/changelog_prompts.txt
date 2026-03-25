@@ -1,0 +1,19 @@
+Use the auto-changelog to create a changelog based on the commit history by using the
+command below:
+
+"poetry run auto-changelog -u"
+
+This will generate a changelog with all the unreleased changes in a file called CHANGELOG.md
+
+Send the content of this file to the company recommended AI ChatBot of your choice (e.g.: Microsoft Copilot) and give it the following prompt:
+
+""""
+From the content from CHANGELOG.md, as a Software Developer, rewrite it following those instructions:
+
+1 - Keep formatting and return it as copy and pasteable raw markdown;
+2 - Correct grammar;
+3 - Correct typos;
+4 - Capitalize the first word in each sentences, lower the case for the rest. Except if it is an acronyms, a name, a method name, a contsant name, or a variable name;
+5 - Create subgroups that summarizes similar topics inside of each release. Do not change the wording the sentences.
+6 - Review your work to ensure that no sentence was lost or mistreated.
+"""

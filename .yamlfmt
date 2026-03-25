@@ -1,0 +1,7 @@
+formatter:
+  trim_trailing_whitespace: true
+  force_array_style: block
+  indentless_arrays: false
+  retain_line_breaks: false
+  continue_on_error: true
+  max_line_length: 88
