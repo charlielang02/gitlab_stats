@@ -1,23 +1,47 @@
 """Generate a Streamlit dashboard to visualize GitLab contributions metrics."""
 
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
-from gitlab_stats.gitlab_stats import _parse_gitlab_log
+from gitlab_stats.gitlab_stats_parser import _parse_gitlab_log
 
 st.set_page_config(layout="wide")
 
 st.title("GitLab Contributions Dashboard")
 
+DEFAULT_FILE_PATH = "gitlab_stats/gitlab_contributions_march_25th.txt"
+PLACEHOLDER_FILE_PATH = "gitlab_stats/gitlab_contributions_placeholder.txt"
+
 file_path = st.text_input(
     "Path to contributions file",
-    value="gitlab_stats/gitlab_contributions_march_25th.txt",
+    value=DEFAULT_FILE_PATH,
 )
 
 if not file_path:
     st.stop()
 
-metrics, total_metrics = _parse_gitlab_log(file_path)
+selected_path = Path(file_path)
+placeholder_path = Path(PLACEHOLDER_FILE_PATH)
+using_placeholder = False  # pylint: disable=invalid-name
+
+if not selected_path.exists():
+    if placeholder_path.exists():
+        using_placeholder = True  # pylint: disable=invalid-name
+        selected_path = placeholder_path
+    else:
+        st.error(
+            "No contributions file was found, and the placeholder file is missing.",
+        )
+        st.stop()
+
+if using_placeholder:
+    st.warning(
+        "Placeholder data is currently shown. Numbers and projects are fake demo data.",
+    )
+
+metrics, total_metrics = _parse_gitlab_log(str(selected_path))
 
 metric_df = pd.DataFrame.from_dict(metrics, orient="index").fillna(0)
 
