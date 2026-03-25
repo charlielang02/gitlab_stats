@@ -1,0 +1,216 @@
+[project]
+authors = [
+    {email = "charlie.lang@ucalgary.ca", name = "Charlie Lang"},
+]
+description = "Dashboard package for GitLab contribution statistics"
+dynamic = ["dependencies"]
+maintainers = [
+    {email = "charlie.lang@ucalgary.ca", name = "Charlie Lang"},
+]
+name = "gitlab_stats"
+readme = "README.md"
+requires-python = ">=3.11, <4"
+version = "0.0.1"
+
+[build-system]
+build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=2.0.0"]
+
+[tool.poetry]
+packages = [{include = "gitlab_stats"}]
+
+[tool.poetry.dependencies]
+pandas = "^2.3.3"
+streamlit = "^1.55.0"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+auto-changelog = "^0.6.0"
+black = {extras = ["jupyter"], version = "^25.1.0"}
+isort = "^6.0.1"
+pre-commit = "^4.2.0"
+pylint = "^3.3.7"
+ruff = "^0.12.7"
+toml-sort = "^0.24.2"
+
+[tool.poetry.group.test]
+optional = true
+
+[tool.poetry.group.test.dependencies]
+pytest = "*"
+pytest-cov = "*"
+
+[tool.autopep8]
+aggressive = 3
+ignore = [
+    "E101",  # - Reindent all lines.
+    "E121",  # - Fix indentation to be a multiple of four.
+    "E122",  # - Add absent indentation for hanging indentation.
+    "E123",  # - Align closing bracket to match opening bracket.
+    "E124",  # - Align closing bracket to match visual indentation.
+    "E125",  # - Indent to distinguish line from next logical line.
+    "E126",  # - Fix over-indented hanging indentation.
+    "E127",  # - Fix visual indentation.
+    "E128",  # - Fix visual indentation.
+    "E129",  # - Fix visual indentation.
+    "E131",  # - Fix hanging indent for unaligned continuation line.
+    "E133",  # - Fix missing indentation for closing bracket.
+    "E201",  # - Remove extraneous whitespace. whitespace after '['
+    "E202",  # - Remove extraneous whitespace. whitespace before ')'
+    "E203",  # - Remove extraneous whitespace. whitespace before ','
+    "E211",  # - Remove extraneous whitespace. whitespace before '('
+    "E224",  # - Remove extraneous whitespace around operator.
+    "E225",  # - Fix missing whitespace around operator.
+    "E226",  # - Fix missing whitespace around arithmetic operator.
+    "E227",  # - Fix missing whitespace around bitwise/shift operator.
+    "E228",  # - Fix missing whitespace around modulo operator.
+    "E231",  # - Add missing whitespace.
+    "E241",  # - Fix extraneous whitespace around keywords.
+    "E242",  # - Remove extraneous whitespace around operator.
+    "E251",  # - Remove whitespace around parameter '=' sign.
+    "E252",  # - Missing whitespace around parameter equals.
+    "E265",  # - Fix spacing after comment hash for block comments.
+    "E266",  # - Fix too many leading '#' for block comments.
+    "E271",  # - multiple spaces after keyword
+    "E272",  # - multiple spaces before keyword
+    "E273",  # - tab after keyword
+    "E274",  # - tab before keyword
+    "E301",  # - Add missing blank line.
+    "E302",  # - Add missing 2 blank lines.
+    "E303",  # - Remove extra blank lines.
+    "E304",  # - Remove blank line following function decorator.
+    "E305",  # - Expected 2 blank lines after end of function or class.
+    "E306",  # - Expected 1 blank line before a nested definition.
+    "E401",  # - Put imports on separate lines.
+    "E402",  # - Fix module level import not at top of file
+    "E501",  # - Try to make lines fit within --max-line-length characters.
+    "E502",  # - Remove extraneous escape of newline.
+    "E701",  # - Put colon-separated compound statement on separate lines.
+    "E711",  # - Fix comparison with None.
+    "E712",  # - Fix comparison with boolean.
+    "E713",  # - Use 'not in' for test for membership.
+    "E714",  # - Use 'is not' test for object identity.
+    "E721",  # - Use "isinstance()" instead of comparing types directly.
+    "E722",  # - Fix bare except.
+    "E731",  # - Use a def when use do not assign a lambda expression.
+    "W291",  # - Remove trailing whitespace.
+    "W292",  # - Add a single newline at the end of the file.
+    "W293",  # - Remove trailing whitespace on blank line.
+    "W391",  # - Remove trailing blank lines.
+    "W503",  # - Fix line break before binary operator.
+    "W504",  # - Fix line break after binary operator.
+    "W605",  # - Fix invalid escape sequence 'x'.
+]
+in-place = true
+max_line_length = 120
+recursive = true
+
+[tool.codespell]
+count = true
+ignore-words-list = ["astroid", "bar", "foo"]
+quiet-level = 3
+skip = '*.po,*.ts,./src/3rdParty,./src/Test'
+
+[tool.docformatter]
+black = true
+blank = false
+force_wrap = true
+in-place = true
+recursive = true
+wrap-descriptions = 88
+wrap-summaries = 88
+
+[tool.isort]
+force_single_line = true
+line_length = 88
+profile = "black"
+
+[tool.ruff]
+indent-width = 4
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+extend-select = [
+    "A",  # flake8-builtins
+    "ASYNC",  # flake8-async
+    "B",  # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "COM",  # flake8-commas
+    "D401",  # First line of docstring should be in imperative mood
+    "DTZ",  # flake8-datetimez
+    "E",  # pycodestyle
+    "ERA",  # eradicate
+    "F",  # Pyflakes
+    "F403",  # `from _ import *` used; unable to detect undefined names
+    "FA",  # flake8-future-annotations
+    "FLY",  # flynt
+    "FURB",  # refurb
+    "I002",  # for sorting imports  (check for missing required imports)
+    "ICN",  # flake8-import-conventions
+    "INP",  # flake8-no-pep420
+    "ISC",  # flake8-implicit-str-concat
+    "LOG",  # flake8-logging
+    "N",  # pep8-naming
+    "NPY",  # NumPy-specific rules
+    "PD",  # pandas-vet
+    "PERF",  # Perflint
+    "PIE",  # flake8-pie
+    "PL",  # Pylint
+    "PLE",  # Error
+    "PLR",  # Refactor
+    "PLW",  # Warning
+    "PT",  # flake8-pytest-style
+    "PYI",  # flake8-pyi
+    "Q",  # flake8-quotes
+    "Q",  # flake8-quotes
+    "RET",  # flake8-return
+    "RSE",  # flake8-raise
+    "RUF",  # RUFF
+    "S",  # flake8-bandit
+    "SIM",  # flake8-simplify
+    "T10",  # flake8-debugger
+    "TC",  # flake8-type-checking
+    "TID",  # flake8-tidy-imports
+    "TRY",  # tryceratops
+    "UP",  # pyupgrade
+    "W",  # pycodestyle
+]
+fixable = ["ALL"]
+ignore = [
+    "B008",  # Do not perform function call `os.getcwd` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+    "D100",  # Missing docstring in public module
+    "D103",  # Missing docstring in public function
+    "D107",  # Missing docstring in `__init__`
+    "D205",  # 1 blank line required between summary line and description
+    "D210",  # No whitespaces allowed surrounding docstring text
+    "F401",  # `module` imported but unused; consider removing, adding to `__all__`, or using a redundant alias
+    "PLR0912",  # Too many branches in function
+    "PLR0913",  # Too many arguments to function
+    "PLR0915",  # Too many lines in function
+    "UP032",  # Use f-string instead of `format` call
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.tomlsort]
+all = true
+check = false
+ignore_case = true
+in_place = true
+no_block_comments = false
+no_comments = false
+no_footer_comments = false
+no_header_comments = false
+no_inline_comments = false
+no_sort_tables = false
+sort_first = ["project", "tool.poetry"]
+sort_inline_arrays = true
+sort_inline_tables = true
+sort_table_keys = true
+spaces_before_inline_comment = 2
+spaces_indent_inline_array = 4
+trailing_comma_inline_array = true
