@@ -45,6 +45,25 @@ metrics, total_metrics = _parse_gitlab_log(str(selected_path))
 
 metric_df = pd.DataFrame.from_dict(metrics, orient="index").fillna(0)
 
+ordered_categories = [
+    "commits",
+    "mr_opened",
+    "mr_merged",
+    "mr_approved",
+    "mr_commented",
+    "branch_created",
+    "branch_deleted",
+    "issue_opened",
+    "code_contributions",
+    "collab_contributions",
+    "total_contributions",
+    "code_pct",
+    "collab_pct",
+]
+ordered_columns = [col for col in ordered_categories if col in metric_df.columns]
+remaining_columns = [col for col in metric_df.columns if col not in ordered_columns]
+metric_df = metric_df[ordered_columns + remaining_columns]
+
 metric_df = metric_df.sort_values(by="total_contributions", ascending=False)
 
 st.header("Overall Summary")
@@ -78,17 +97,19 @@ if selected_project:
 
     st.subheader(selected_project)
 
-    st.write(project_data)
+    st.write(project_data[ordered_columns])
 
     st.bar_chart(
         project_data[
             [
                 "commits",
-                "mr_commented",
                 "mr_opened",
                 "mr_merged",
+                "mr_approved",
+                "mr_commented",
                 "branch_created",
                 "branch_deleted",
+                "issue_opened",
             ]
         ],
     )
