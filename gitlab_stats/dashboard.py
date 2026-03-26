@@ -10,6 +10,25 @@ import streamlit as st
 
 from gitlab_stats.gitlab_stats_parser import _parse_gitlab_log
 
+PRIMARY = "#0B3954"
+SECONDARY = "#A11692"
+ACCENT = "#58BC82"
+HIGHLIGHT = "#FCFC62"
+PALETTE = [PRIMARY, SECONDARY, ACCENT, HIGHLIGHT]
+CONTINUOUS_SCALE = [
+    [0.0, HIGHLIGHT],
+    [0.4, ACCENT],
+    [0.75, PRIMARY],
+    [1.0, SECONDARY],
+]
+HEATMAP_SCALE = [
+    [0.0, HIGHLIGHT],
+    [0.35, ACCENT],
+    [0.7, PRIMARY],
+    [0.9, SECONDARY],
+    [1.0, "#4a0b44"],
+]
+
 st.set_page_config(
     layout="wide",
     page_title="GitLab Contributions Dashboard",
@@ -20,7 +39,7 @@ st.markdown(
     """
     <style>
         .main-header {
-            font-size: 2.5em;
+            font-size: 3.5rem;
             font-weight: bold;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
@@ -32,7 +51,7 @@ st.markdown(
             color: #0f172a;
             padding: 1rem;
             border-radius: 0.5rem;
-            border-left: 4px solid #0066cc;
+            border-left: 4px solid #4facfe;
         }
         .insight-box strong {
             color: #0f172a;
@@ -56,7 +75,7 @@ st.markdown(
             .insight-box {
                 background-color: #1f2937;
                 color: #e5e7eb;
-                border-left: 4px solid #60a5fa;
+                border-left: 4px solid #4facfe;
             }
             .insight-box strong {
                 color: #f3f4f6;
@@ -143,7 +162,7 @@ col1.metric("Total Contributions", int(total_metrics["total_contributions"]))
 col2.metric("Code Contributions", int(total_metrics["code_contributions"]))
 col3.metric("Collaboration Contributions", int(total_metrics["collab_contributions"]))
 col4.metric("Projects Contributed", len(metric_df))
-
+st.markdown("---")
 summary_col1, summary_col2, summary_col3 = st.columns(3)
 with summary_col1:
     avg_commits = metric_df["commits"].mean()
@@ -156,6 +175,33 @@ with summary_col2:
 with summary_col3:
     code_pct = total_metrics.get("code_pct", 0)
     st.metric("Code vs Collab", f"{code_pct:.1f}% Code")
+
+st.markdown("---")
+
+DOMINANT_STYLE = (
+    "Code-Heavy"
+    if total_metrics["code_contributions"] > total_metrics["collab_contributions"]
+    else "Collaboration-Heavy"
+)
+
+top_project = metric_df.index[0]
+
+st.markdown("### 🧠 Developer Profile")
+
+SIGNAL = (
+    "High Commit Velocity"
+    if metric_df["commits"].mean() > metric_df["collab_contributions"].mean()
+    else "High Collaboration Activity"
+)
+
+st.info(
+    f"""
+You are a **{DOMINANT_STYLE} Contributor** across **{len(metric_df)} projects**.
+
+- Most active project: **{top_project}**
+- Strongest signal: {SIGNAL}
+""",
+)
 
 st.markdown("---")
 
@@ -210,6 +256,30 @@ with insight_col3:
 
 st.markdown("---")
 
+st.header("📈 Contribution Distribution")
+
+top3 = metric_df.head(3)
+
+st.subheader("🥇 Top 3 Projects by Total Contributions")
+
+for i, (proj, row) in enumerate(top3.iterrows(), 1):
+    st.write(f"{i}. **{proj}** — {int(row['total_contributions'])} contributions")
+
+cum_df = (
+    metric_df["total_contributions"].cumsum() / metric_df["total_contributions"].sum()
+)
+
+fig_pareto = px.line(
+    x=range(len(cum_df)),
+    y=100 * cum_df,
+    labels={"x": "Projects", "y": "Cumulative Contribution %"},
+    title="Contribution Concentration (Pareto)",
+)
+
+st.plotly_chart(fig_pareto, width="stretch")
+
+st.markdown("---")
+
 st.header("📊 Contribution Breakdown")
 
 breakdown_tabs = st.tabs(["Overview", "Detailed Table", "All Charts"])
@@ -226,7 +296,7 @@ with breakdown_tabs[0]:
         fig1 = px.pie(
             names=list(code_collab_data.keys()),
             values=list(code_collab_data.values()),
-            color_discrete_sequence=["#667eea", "#764ba2"],
+            color_discrete_sequence=[PRIMARY, SECONDARY],
             hole=0.35,
         )
         fig1.update_layout(height=400)
@@ -250,14 +320,22 @@ with breakdown_tabs[0]:
         fig2 = px.pie(
             names=list(type_dist.keys()),
             values=list(type_dist.values()),
-            color_discrete_sequence=px.colors.qualitative.Set3,
+            color_discrete_sequence=PALETTE,
         )
         fig2.update_layout(height=400)
         st.plotly_chart(fig2, width="stretch")
 
 with breakdown_tabs[1]:
     st.subheader("📋 Per Project Detailed Breakdown")
-    st.dataframe(metric_df, width="stretch", height=500)
+    st.dataframe(
+        metric_df.style.highlight_max(axis=0, color=SECONDARY),
+        width="stretch",
+        height=500,
+    )
+    st.markdown(
+        "Note: The table is sorted by total contributions. "
+        "Highlighted values indicate the maximum for each metric across all projects.",
+    )
 
 with breakdown_tabs[2]:
     st.subheader("Distribution by Project")
@@ -266,20 +344,20 @@ with breakdown_tabs[2]:
     with chart_col1:
         fig_dist = go.Figure()
         fig_dist.add_trace(
-            go.Box(y=metric_df["commits"], name="Commits", marker_color="indianred"),
+            go.Box(y=metric_df["commits"], name="Commits", marker_color=PRIMARY),
         )
         fig_dist.add_trace(
             go.Box(
                 y=metric_df["mr_opened"] + metric_df["mr_merged"],
                 name="Total MRs",
-                marker_color="lightsalmon",
+                marker_color=SECONDARY,
             ),
         )
         fig_dist.add_trace(
             go.Box(
                 y=metric_df["issue_opened"],
                 name="Issues",
-                marker_color="lightseagreen",
+                marker_color=ACCENT,
             ),
         )
         fig_dist.update_layout(
@@ -296,7 +374,7 @@ with breakdown_tabs[2]:
             size="total_contributions",
             hover_name=metric_df.index,
             color="code_pct",
-            color_continuous_scale="Viridis",
+            color_continuous_scale=CONTINUOUS_SCALE,
             labels={
                 "commits": "Commits",
                 "mr_opened": "MRs Opened",
@@ -329,7 +407,7 @@ with metric_tabs[0]:
         y="project",
         color="commits",
         orientation="h",
-        color_continuous_scale="Viridis",
+        color_continuous_scale=CONTINUOUS_SCALE,
         labels={"commits": "Commit Count", "project": "Project"},
     )
     fig_commits.update_layout(showlegend=False, height=500)
@@ -358,10 +436,10 @@ with metric_tabs[1]:
         y=["mr_opened", "mr_merged", "mr_approved", "mr_commented"],
         labels={"value": "Count", "index": "Project", "variable": "MR Type"},
         color_discrete_map={
-            "mr_opened": "#667eea",
-            "mr_merged": "#764ba2",
-            "mr_approved": "#f093fb",
-            "mr_commented": "#4facfe",
+            "mr_opened": PRIMARY,
+            "mr_merged": SECONDARY,
+            "mr_approved": ACCENT,
+            "mr_commented": HIGHLIGHT,
         },
     )
     fig_mr.update_layout(height=500, barmode="stack", xaxis_tickangle=-45)
@@ -393,8 +471,8 @@ with metric_tabs[2]:
         y=["code_contributions", "collab_contributions"],
         labels={"value": "Contributions", "index": "Project", "variable": "Type"},
         color_discrete_map={
-            "code_contributions": "#667eea",
-            "collab_contributions": "#764ba2",
+            "code_contributions": PRIMARY,
+            "collab_contributions": SECONDARY,
         },
     )
     fig_comp.update_layout(height=500, barmode="group", xaxis_tickangle=-45)
@@ -426,7 +504,7 @@ with metric_tabs[3]:
         labels={"x": "Project", "y": "Activity Type", "color": "Count"},
         x=heatmap_data.index,
         y=heatmap_data.columns,
-        color_continuous_scale="YlOrRd",
+        color_continuous_scale=HEATMAP_SCALE,
         aspect="auto",
     )
     if use_log_scale:
@@ -461,7 +539,7 @@ with col_bars_1:
         y="project",
         color="total_contributions",
         orientation="h",
-        color_continuous_scale="Blues",
+        color_continuous_scale=CONTINUOUS_SCALE,
         labels={"total_contributions": "Total Contributions", "project": "Project"},
         text="total_contributions",
     )
@@ -481,7 +559,7 @@ with col_bars_2:
         y="project",
         orientation="h",
         color="code_pct",
-        color_continuous_scale=["#764ba2", "#667eea"],
+        color_continuous_scale=CONTINUOUS_SCALE,
         labels={"code_pct": "Code Contribution %", "project": "Project"},
         text=style_df_plot["code_pct"].round(1),
     )
@@ -561,7 +639,7 @@ if selected_project:
                 project_data["code_contributions"],
                 project_data["collab_contributions"],
             ],
-            color_discrete_sequence=["#667eea", "#764ba2"],
+            color_discrete_sequence=[PRIMARY, SECONDARY],
             hole=0.35,
         )
         fig_project_pie.update_layout(height=400)
@@ -599,7 +677,7 @@ if selected_project:
                 project_data["branch_deleted"],
                 project_data["issue_opened"],
             ],
-            color_continuous_scale="Viridis",
+            color_continuous_scale=CONTINUOUS_SCALE,
             labels={"x": "Activity Type", "y": "Count"},
         )
         fig_project_bar.update_layout(
