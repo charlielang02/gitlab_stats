@@ -3,19 +3,50 @@
 from pathlib import Path
 
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 from gitlab_stats.gitlab_stats_parser import _parse_gitlab_log
 
-st.set_page_config(layout="wide")
+st.set_page_config(
+    layout="wide",
+    page_title="GitLab Contributions Dashboard",
+    initial_sidebar_state="expanded",
+)
 
-st.title("GitLab Contributions Dashboard")
+st.markdown(
+    """
+    <style>
+        .main-header {
+            font-size: 2.5em;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+        .insight-box {
+            background-color: #e7f3ff;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border-left: 4px solid #0066cc;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="main-header">📊 GitLab Contributions Dashboard</div>',
+    unsafe_allow_html=True,
+)
 
 DEFAULT_FILE_PATH = "gitlab_contributions.txt"
 PLACEHOLDER_FILE_PATH = "doc/gitlab_contributions_placeholder.txt"
 
 file_path = st.text_input(
-    "Path to contributions file",
+    "📁 Path to contributions file",
     value=DEFAULT_FILE_PATH,
 )
 
@@ -66,50 +97,450 @@ metric_df = metric_df[ordered_columns + remaining_columns]
 
 metric_df = metric_df.sort_values(by="total_contributions", ascending=False)
 
-st.header("Overall Summary")
+st.header("📈 Executive Summary")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 col1.metric("Total Contributions", int(total_metrics["total_contributions"]))
 col2.metric("Code Contributions", int(total_metrics["code_contributions"]))
 col3.metric("Collaboration Contributions", int(total_metrics["collab_contributions"]))
+col4.metric("Projects Contributed", len(metric_df))
 
-st.header("Per Project Breakdown")
-st.dataframe(metric_df)
+summary_col1, summary_col2, summary_col3 = st.columns(3)
+with summary_col1:
+    avg_commits = metric_df["commits"].mean()
+    st.metric("Avg Commits/Project", f"{avg_commits:.1f}")
 
-st.header("Top Projects by Contributions")
+with summary_col2:
+    avg_mrs = (metric_df["mr_opened"] + metric_df["mr_merged"]).mean()
+    st.metric("Avg MRs/Project", f"{avg_mrs:.1f}")
 
-top_n = st.slider("Number of projects", 5, 20, 10)
+with summary_col3:
+    code_pct = total_metrics.get("code_pct", 0)
+    st.metric("Code vs Collab", f"{code_pct:.1f}% Code")
 
-st.bar_chart(metric_df["total_contributions"].head(top_n))
+st.markdown("---")
 
-st.header("Code vs Collaboration Split")
+st.header("🎯 Key Insights")
 
-split_df = metric_df[["code_contributions", "collab_contributions"]]
-st.bar_chart(split_df.head(top_n))
+insight_col1, insight_col2, insight_col3 = st.columns(3)
 
-st.header("Project Deep Dive")
+with insight_col1:
+    top_project = metric_df.iloc[0]
+    st.markdown(
+        f"""
+    <div class="insight-box">
+    <strong>🏆 Top Contributor Project</strong><br>
+    {metric_df.index[0]}<br>
+    {int(top_project['total_contributions'])} contributions
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+with insight_col2:
+    commit_velocity = (
+        metric_df["commits"].sum() / len(metric_df) if len(metric_df) > 0 else 0
+    )
+    st.markdown(
+        f"""
+    <div class="insight-box">
+    <strong>⚡ Commit Velocity</strong><br>
+    {commit_velocity:.1f} commits/project<br>
+    {metric_df["commits"].sum()} total commits
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+with insight_col3:
+    collaboration_ratio = (
+        total_metrics["collab_contributions"] / total_metrics["total_contributions"]
+        if total_metrics["total_contributions"] > 0
+        else 0
+    )
+    st.markdown(
+        f"""
+    <div class="insight-box">
+    <strong>🤝 Collaboration Index</strong><br>
+    {collaboration_ratio * 100:.1f}% collaborative<br>
+    {int(total_metrics['collab_contributions'])} collab contributions
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+st.markdown("---")
+
+st.header("📊 Contribution Breakdown")
+
+breakdown_tabs = st.tabs(["Overview", "Detailed Table", "All Charts"])
+
+with breakdown_tabs[0]:
+    pie_col1, pie_col2 = st.columns(2)
+
+    with pie_col1:
+        st.subheader("💡 Code vs Collaboration")
+        code_collab_data = {
+            "Code Contributions": int(total_metrics["code_contributions"]),
+            "Collaboration": int(total_metrics["collab_contributions"]),
+        }
+        fig1 = px.pie(
+            names=list(code_collab_data.keys()),
+            values=list(code_collab_data.values()),
+            color_discrete_sequence=["#667eea", "#764ba2"],
+            hole=0.35,
+        )
+        fig1.update_layout(height=400)
+        st.plotly_chart(fig1, width="stretch")
+
+    with pie_col2:
+        st.subheader("📈 Contribution Type Distribution")
+        type_dist = {
+            "Commits": int(total_metrics.get("commits", 0)),
+            "MRs Opened": int(total_metrics.get("mr_opened", 0)),
+            "MRs Merged": int(total_metrics.get("mr_merged", 0)),
+            "MRs Approved": int(total_metrics.get("mr_approved", 0)),
+            "MR Comments": int(total_metrics.get("mr_commented", 0)),
+            "Issues": int(total_metrics.get("issue_opened", 0)),
+            "Branches": int(
+                total_metrics.get("branch_created", 0)
+                + total_metrics.get("branch_deleted", 0),
+            ),
+        }
+        type_dist = {k: v for k, v in type_dist.items() if v > 0}
+        fig2 = px.pie(
+            names=list(type_dist.keys()),
+            values=list(type_dist.values()),
+            color_discrete_sequence=px.colors.qualitative.Set3,
+        )
+        fig2.update_layout(height=400)
+        st.plotly_chart(fig2, width="stretch")
+
+with breakdown_tabs[1]:
+    st.subheader("📋 Per Project Detailed Breakdown")
+    st.dataframe(metric_df, width="stretch", height=500)
+
+with breakdown_tabs[2]:
+    st.subheader("Distribution by Project")
+    chart_col1, chart_col2 = st.columns(2)
+
+    with chart_col1:
+        fig_dist = go.Figure()
+        fig_dist.add_trace(
+            go.Box(y=metric_df["commits"], name="Commits", marker_color="indianred"),
+        )
+        fig_dist.add_trace(
+            go.Box(
+                y=metric_df["mr_opened"] + metric_df["mr_merged"],
+                name="Total MRs",
+                marker_color="lightsalmon",
+            ),
+        )
+        fig_dist.add_trace(
+            go.Box(
+                y=metric_df["issue_opened"],
+                name="Issues",
+                marker_color="lightseagreen",
+            ),
+        )
+        fig_dist.update_layout(
+            height=400,
+            title="Distribution of Metrics Across Projects",
+        )
+        st.plotly_chart(fig_dist, width="stretch")
+
+    with chart_col2:
+        fig_scatter = px.scatter(
+            metric_df,
+            x="commits",
+            y="mr_opened",
+            size="total_contributions",
+            hover_name=metric_df.index,
+            color="code_pct",
+            color_continuous_scale="Viridis",
+            labels={
+                "commits": "Commits",
+                "mr_opened": "MRs Opened",
+                "code_pct": "Code %",
+            },
+        )
+        fig_scatter.update_layout(height=400, title="Commits vs MRs by Project")
+        st.plotly_chart(fig_scatter, width="stretch")
+
+st.markdown("---")
+
+st.header("⚡ Performance Metrics")
+
+metric_tabs = st.tabs(
+    [
+        "Commit Velocity",
+        "Collaboration Activity",
+        "Project Comparison",
+        "Activity Heatmap",
+    ],
+)
+
+with metric_tabs[0]:
+    st.subheader("🔥 Commit Velocity by Project")
+    commit_df = metric_df[["commits"]].sort_values("commits", ascending=True).tail(20)
+    fig_commits = px.bar(
+        x=commit_df["commits"],
+        y=commit_df.index,
+        color=commit_df["commits"],
+        color_continuous_scale="Viridis",
+        labels={"x": "Commit Count", "index": "Project"},
+    )
+    fig_commits.update_layout(showlegend=False, height=500)
+    st.plotly_chart(fig_commits, width="stretch")
+
+    velocity_col1, velocity_col2, velocity_col3, velocity_col4 = st.columns(4)
+    with velocity_col1:
+        st.metric("Total Commits", int(metric_df["commits"].sum()))
+    with velocity_col2:
+        st.metric("Max Commits/Project", int(metric_df["commits"].max()))
+    with velocity_col3:
+        st.metric("Median Commits", f"{metric_df['commits'].median():.0f}")
+    with velocity_col4:
+        st.metric("Std Dev", f"{metric_df['commits'].std():.1f}")
+
+with metric_tabs[1]:
+    st.subheader("🤝 Merge Request & Code Review Activity")
+    mr_activity = (
+        metric_df[["mr_opened", "mr_merged", "mr_approved", "mr_commented"]]
+        .sort_values("mr_opened", ascending=False)
+        .head(20)
+    )
+    fig_mr = px.bar(
+        mr_activity,
+        x=mr_activity.index,
+        y=["mr_opened", "mr_merged", "mr_approved", "mr_commented"],
+        labels={"value": "Count", "index": "Project", "variable": "MR Type"},
+        color_discrete_map={
+            "mr_opened": "#667eea",
+            "mr_merged": "#764ba2",
+            "mr_approved": "#f093fb",
+            "mr_commented": "#4facfe",
+        },
+    )
+    fig_mr.update_layout(height=500, barmode="stack", xaxis_tickangle=-45)
+    st.plotly_chart(fig_mr, width="stretch")
+
+    mr_col1, mr_col2, mr_col3 = st.columns(3)
+    with mr_col1:
+        st.metric("Total MRs Opened", int(metric_df["mr_opened"].sum()))
+    with mr_col2:
+        st.metric("Total MRs Merged", int(metric_df["mr_merged"].sum()))
+    with mr_col3:
+        merge_rate = (
+            (metric_df["mr_merged"].sum() / metric_df["mr_opened"].sum() * 100)
+            if metric_df["mr_opened"].sum() > 0
+            else 0
+        )
+        st.metric("Merge Success Rate", f"{merge_rate:.1f}%")
+
+with metric_tabs[2]:
+    st.subheader("🎯 Project Comparison: Code vs Collaboration")
+    comparison_df = (
+        metric_df[["code_contributions", "collab_contributions"]]
+        .sort_values("code_contributions", ascending=False)
+        .head(20)
+    )
+    fig_comp = px.bar(
+        comparison_df,
+        x=comparison_df.index,
+        y=["code_contributions", "collab_contributions"],
+        labels={"value": "Contributions", "index": "Project", "variable": "Type"},
+        color_discrete_map={
+            "code_contributions": "#667eea",
+            "collab_contributions": "#764ba2",
+        },
+    )
+    fig_comp.update_layout(height=500, barmode="group", xaxis_tickangle=-45)
+    st.plotly_chart(fig_comp, width="stretch")
+
+with metric_tabs[3]:
+    st.subheader("🔥 Activity Heatmap")
+
+    heatmap_data = metric_df[
+        [
+            "commits",
+            "mr_opened",
+            "mr_merged",
+            "mr_approved",
+            "issue_opened",
+            "branch_created",
+        ]
+    ].head(20)
+
+    fig_heatmap = px.imshow(
+        heatmap_data.T,
+        labels={"x": "Project", "y": "Activity Type", "color": "Count"},
+        x=heatmap_data.index,
+        y=heatmap_data.columns,
+        color_continuous_scale="YlOrRd",
+        aspect="auto",
+    )
+    fig_heatmap.update_layout(height=500)
+    st.plotly_chart(fig_heatmap, width="stretch")
+
+st.markdown("---")
+
+st.header("🏆 Top Projects Analysis")
+
+top_n = st.slider(
+    "Number of projects to display",
+    3,
+    len(metric_df),
+    min(10, len(metric_df)),
+)
+
+col_bars_1, col_bars_2 = st.columns(2)
+
+with col_bars_1:
+    st.subheader("🥇 Top Projects by Total Contributions")
+    top_projects = (
+        metric_df[["total_contributions"]]
+        .sort_values("total_contributions", ascending=True)
+        .tail(top_n)
+    )
+    fig_top = px.bar(
+        x=top_projects["total_contributions"],
+        y=top_projects.index,
+        color=top_projects["total_contributions"],
+        color_continuous_scale="Blues",
+        labels={"x": "Total Contributions", "index": "Project"},
+        text=top_projects["total_contributions"],
+    )
+    fig_top.update_traces(textposition="outside")
+    fig_top.update_layout(showlegend=False, height=400)
+    st.plotly_chart(fig_top, width="stretch")
+
+with col_bars_2:
+    st.subheader("📊 Contribution Style by Project")
+    style_df = (
+        metric_df[["code_pct"]].sort_values("code_pct", ascending=False).head(top_n)
+    )
+    fig_style = px.bar(
+        x=style_df["code_pct"],
+        y=style_df.index,
+        orientation="h",
+        color=style_df["code_pct"],
+        color_continuous_scale=["#764ba2", "#667eea"],
+        labels={"x": "Code Contribution %", "index": "Project"},
+        text=style_df["code_pct"].round(1),
+    )
+    fig_style.update_traces(textposition="outside")
+    fig_style.update_layout(height=400)
+    st.plotly_chart(fig_style, width="stretch")
+
+st.markdown("---")
+
+st.header("🔍 Detailed Project Deep Dive")
 
 selected_project = st.selectbox("Select Project", metric_df.index)
 
 if selected_project:
     project_data = metric_df.loc[selected_project]
 
-    st.subheader(selected_project)
+    col_left, col_right = st.columns([2, 1])
 
-    st.write(project_data[ordered_columns])
+    with col_left:
+        st.subheader(f"📍 {selected_project}")
 
-    st.bar_chart(
-        project_data[
-            [
-                "commits",
-                "mr_opened",
-                "mr_merged",
-                "mr_approved",
-                "mr_commented",
-                "branch_created",
-                "branch_deleted",
-                "issue_opened",
-            ]
-        ],
+        project_col1, project_col2, project_col3 = st.columns(3)
+        with project_col1:
+            st.metric("Total Contributions", int(project_data["total_contributions"]))
+        with project_col2:
+            st.metric("Code Contributions", int(project_data["code_contributions"]))
+        with project_col3:
+            st.metric(
+                "Collaboration Contributions",
+                int(project_data["collab_contributions"]),
+            )
+
+    with col_right:
+        project_meta_col1, project_meta_col2 = st.columns(2)
+        with project_meta_col1:
+            st.metric(
+                "Code %",
+                f"{project_data['code_pct']:.1f}%",
+            )
+        with project_meta_col2:
+            st.metric(
+                "Collab %",
+                f"{project_data['collab_pct']:.1f}%",
+            )
+
+    st.subheader("📈 Project Metrics Breakdown")
+    st.dataframe(project_data[ordered_columns].to_frame(), width="stretch")
+
+    st.subheader("📊 Activity Details")
+    activity_col1, activity_col2 = st.columns(2)
+
+    with activity_col1:
+        fig_project_pie = px.pie(
+            names=["Code Contributions", "Collaboration"],
+            values=[
+                project_data["code_contributions"],
+                project_data["collab_contributions"],
+            ],
+            color_discrete_sequence=["#667eea", "#764ba2"],
+            hole=0.35,
+        )
+        fig_project_pie.update_layout(height=400)
+        st.plotly_chart(fig_project_pie, width="stretch")
+
+    with activity_col2:
+        fig_project_bar = px.bar(
+            x=[
+                "Commits",
+                "MR Opened",
+                "MR Merged",
+                "MR Approved",
+                "MR Commented",
+                "Branch Created",
+                "Branch Deleted",
+                "Issues",
+            ],
+            y=[
+                project_data["commits"],
+                project_data["mr_opened"],
+                project_data["mr_merged"],
+                project_data["mr_approved"],
+                project_data["mr_commented"],
+                project_data["branch_created"],
+                project_data["branch_deleted"],
+                project_data["issue_opened"],
+            ],
+            color=[
+                project_data["commits"],
+                project_data["mr_opened"],
+                project_data["mr_merged"],
+                project_data["mr_approved"],
+                project_data["mr_commented"],
+                project_data["branch_created"],
+                project_data["branch_deleted"],
+                project_data["issue_opened"],
+            ],
+            color_continuous_scale="Viridis",
+            labels={"x": "Activity Type", "y": "Count"},
+        )
+        fig_project_bar.update_layout(
+            showlegend=False,
+            height=400,
+            xaxis_tickangle=-45,
+        )
+        st.plotly_chart(fig_project_bar, width="stretch")
+
+st.markdown("---")
+
+st.header("📥 Data Export")
+if st.button("Download Full Dataset as CSV"):
+    csv = metric_df.to_csv(index=True)
+    st.download_button(
+        label="Download",
+        data=csv,
+        file_name="gitlab_contributions_export.csv",
+        mime="text/csv",
     )
