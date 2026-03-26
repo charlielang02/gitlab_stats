@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -28,9 +29,46 @@ st.markdown(
         }
         .insight-box {
             background-color: #e7f3ff;
+            color: #0f172a;
             padding: 1rem;
             border-radius: 0.5rem;
             border-left: 4px solid #0066cc;
+        }
+        .insight-box strong {
+            color: #0f172a;
+        }
+        .project-metrics-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .project-metrics-table th {
+            background-color: #f0f2f6;
+            color: #262730;
+            text-align: left;
+            padding: 0.55rem;
+            border: 1px solid #e6e9ef;
+        }
+        .project-metrics-table td {
+            padding: 0.55rem;
+            border: 1px solid #e6e9ef;
+        }
+        @media (prefers-color-scheme: dark) {
+            .insight-box {
+                background-color: #1f2937;
+                color: #e5e7eb;
+                border-left: 4px solid #60a5fa;
+            }
+            .insight-box strong {
+                color: #f3f4f6;
+            }
+            .project-metrics-table th {
+                background-color: #262730;
+                color: #fafafa;
+                border: 1px solid #3a3f4b;
+            }
+            .project-metrics-table td {
+                border: 1px solid #3a3f4b;
+            }
         }
     </style>
     """,
@@ -147,7 +185,7 @@ with insight_col2:
     <div class="insight-box">
     <strong>⚡ Commit Velocity</strong><br>
     {commit_velocity:.1f} commits/project<br>
-    {metric_df["commits"].sum()} total commits
+    {int(metric_df["commits"].sum())} total commits
     </div>
     """,
         unsafe_allow_html=True,
@@ -284,12 +322,15 @@ metric_tabs = st.tabs(
 with metric_tabs[0]:
     st.subheader("🔥 Commit Velocity by Project")
     commit_df = metric_df[["commits"]].sort_values("commits", ascending=True).tail(20)
+    commit_df_plot = commit_df.reset_index().rename(columns={"index": "project"})
     fig_commits = px.bar(
-        x=commit_df["commits"],
-        y=commit_df.index,
-        color=commit_df["commits"],
+        commit_df_plot,
+        x="commits",
+        y="project",
+        color="commits",
+        orientation="h",
         color_continuous_scale="Viridis",
-        labels={"x": "Commit Count", "index": "Project"},
+        labels={"commits": "Commit Count", "project": "Project"},
     )
     fig_commits.update_layout(showlegend=False, height=500)
     st.plotly_chart(fig_commits, width="stretch")
@@ -373,14 +414,23 @@ with metric_tabs[3]:
         ]
     ].head(20)
 
+    use_log_scale = st.checkbox(
+        "Use logarithmic color scale",
+        value=True,
+        help="Compresses outliers so lower-activity projects remain visible.",
+    )
+    heatmap_plot_data = np.log1p(heatmap_data) if use_log_scale else heatmap_data
+
     fig_heatmap = px.imshow(
-        heatmap_data.T,
+        heatmap_plot_data.T,
         labels={"x": "Project", "y": "Activity Type", "color": "Count"},
         x=heatmap_data.index,
         y=heatmap_data.columns,
         color_continuous_scale="YlOrRd",
         aspect="auto",
     )
+    if use_log_scale:
+        fig_heatmap.update_coloraxes(colorbar_title="log(1 + count)")
     fig_heatmap.update_layout(height=500)
     st.plotly_chart(fig_heatmap, width="stretch")
 
@@ -404,13 +454,16 @@ with col_bars_1:
         .sort_values("total_contributions", ascending=True)
         .tail(top_n)
     )
+    top_projects_plot = top_projects.reset_index().rename(columns={"index": "project"})
     fig_top = px.bar(
-        x=top_projects["total_contributions"],
-        y=top_projects.index,
-        color=top_projects["total_contributions"],
+        top_projects_plot,
+        x="total_contributions",
+        y="project",
+        color="total_contributions",
+        orientation="h",
         color_continuous_scale="Blues",
-        labels={"x": "Total Contributions", "index": "Project"},
-        text=top_projects["total_contributions"],
+        labels={"total_contributions": "Total Contributions", "project": "Project"},
+        text="total_contributions",
     )
     fig_top.update_traces(textposition="outside")
     fig_top.update_layout(showlegend=False, height=400)
@@ -421,14 +474,16 @@ with col_bars_2:
     style_df = (
         metric_df[["code_pct"]].sort_values("code_pct", ascending=False).head(top_n)
     )
+    style_df_plot = style_df.reset_index().rename(columns={"index": "project"})
     fig_style = px.bar(
-        x=style_df["code_pct"],
-        y=style_df.index,
+        style_df_plot,
+        x="code_pct",
+        y="project",
         orientation="h",
-        color=style_df["code_pct"],
+        color="code_pct",
         color_continuous_scale=["#764ba2", "#667eea"],
-        labels={"x": "Code Contribution %", "index": "Project"},
-        text=style_df["code_pct"].round(1),
+        labels={"code_pct": "Code Contribution %", "project": "Project"},
+        text=style_df_plot["code_pct"].round(1),
     )
     fig_style.update_traces(textposition="outside")
     fig_style.update_layout(height=400)
@@ -473,7 +528,28 @@ if selected_project:
             )
 
     st.subheader("📈 Project Metrics Breakdown")
-    st.dataframe(project_data[ordered_columns].to_frame(), width="stretch")
+    project_metrics_df = (
+        project_data[ordered_columns]
+        .rename_axis("Metric")
+        .reset_index(
+            name="Value",
+        )
+    )
+    pct_metrics = {"code_pct", "collab_pct"}
+    project_metrics_df["Value"] = [
+        f"{value:.1f}" if metric in pct_metrics else f"{int(value)}"
+        for metric, value in zip(
+            project_metrics_df["Metric"],
+            project_metrics_df["Value"],
+            strict=False,
+        )
+    ]
+    project_metrics_html = project_metrics_df.to_html(
+        index=False,
+        classes="project-metrics-table",
+        border=0,
+    )
+    st.markdown(project_metrics_html, unsafe_allow_html=True)
 
     st.subheader("📊 Activity Details")
     activity_col1, activity_col2 = st.columns(2)
@@ -536,11 +612,10 @@ if selected_project:
 st.markdown("---")
 
 st.header("📥 Data Export")
-if st.button("Download Full Dataset as CSV"):
-    csv = metric_df.to_csv(index=True)
-    st.download_button(
-        label="Download",
-        data=csv,
-        file_name="gitlab_contributions_export.csv",
-        mime="text/csv",
-    )
+csv = metric_df.to_csv(index=True)
+st.download_button(
+    label="Download Full Dataset as CSV",
+    data=csv,
+    file_name="gitlab_contributions_export.csv",
+    mime="text/csv",
+)

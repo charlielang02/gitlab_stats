@@ -1,6 +1,6 @@
 Report
 ======
-293 statements analysed.
+304 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -25,6 +25,7 @@ External dependencies
 
 gitlab_stats
 \-gitlab_stats_parser (gitlab_stats.dashboard)
+numpy (gitlab_stats.dashboard)
 pandas (gitlab_stats.dashboard)
 plotly
 \-express (gitlab_stats.dashboard)
@@ -33,7 +34,7 @@ streamlit (gitlab_stats.dashboard)
 
 
 
-782 lines have been analyzed
+857 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -41,13 +42,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |542    |69.31 |
+|code      |577    |67.33 |
 +----------+-------+------+
-|docstring |115    |14.71 |
+|docstring |153    |17.85 |
 +----------+-------+------+
-|comment   |9      |1.15  |
+|comment   |9      |1.05  |
 +----------+-------+------+
-|empty     |116    |14.83 |
+|empty     |118    |13.77 |
 +----------+-------+------+
 
 
