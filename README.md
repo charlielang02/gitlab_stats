@@ -54,23 +54,39 @@ GitLab Stats is a Python package that transforms raw GitLab contribution logs in
 
 ```mermaid
 graph TB
-    A[GitLab Activity Log] -->|Parse| B[gitlab_stats_parser.py]
-    B -->|Extract Metrics| C[Data Dictionary]
-    C -->|DataFrame| D[dashboard.py]
-    D -->|Render| E[Streamlit Dashboard]
-    F[Placeholder Data] -.->|Fallback| D
+   B[gitlab_contributions.txt]
+   C[doc/gitlab_contributions_placeholder.txt]
+   D[dashboard.py]
+   E[gitlab_stats_parser.py]
+   F[helpers.py: prepare_metric_df]
+   G[sections.py]
+   H[charts.py]
+   I[Streamlit Dashboard]
 
-    subgraph "Parsing Layer"
-        B
+   B -->|Primary source| D
+   C -.->|Fallback if primary missing| D
+   D -->|Parse log| E
+   E -->|metrics + totals| F
+   F -->|DataFrame + ordered columns| G
+   G -->|Build visual objects| H
+   G -->|Render| I
+   H -->|Plotly figures| I
+
+   subgraph "Input Layer"
+      B
+      C
     end
 
-    subgraph "Data Layer"
-        C
+   subgraph "Application Layer"
+      D
+      E
+      F
+      G
+      H
     end
 
-    subgraph "Presentation Layer"
-        D
-        E
+   subgraph "Presentation"
+      I
     end
 ```
 
@@ -80,11 +96,15 @@ graph TB
   - Regex-based log parsing
   - Contribution classification
   - Aggregation and computation
-- **dashboard.py**: Streamlit web interface
-  - File input handling
-  - Data visualization
-  - Interactive filtering
-- **gitlab_contributions_placeholder.txt**: Sample dataset for testing and demo purposes
+- **dashboard.py**: Streamlit entrypoint and source selection
+  - Streamlit page setup
+  - Input path capture
+  - Placeholder fallback handling
+  - Section orchestration
+- **gitlab_stats/dashboard_utils/helpers.py**: Constants, CSS injection, DataFrame preparation
+- **gitlab_stats/dashboard_utils/sections.py**: Dashboard section rendering
+- **gitlab_stats/dashboard_utils/charts.py**: Plotly figure builders
+- **doc/gitlab_contributions_placeholder.txt**: Demo dataset fallback
 
 ## Installation
 
@@ -154,7 +174,10 @@ Activate your Poetry environment or run directly with Poetry:
 poetry run streamlit run gitlab_stats/dashboard.py
 ```
 
-The dashboard will launch at `http://localhost:8502`
+The dashboard launches at `http://localhost:8501` by default (or the next available port).
+
+Current implementation uses file-based ingestion (`gitlab_contributions.txt`) with a local
+placeholder fallback. GitLab API integration is planned as the next iteration.
 
 ### Data Format
 
@@ -191,7 +214,9 @@ Supported actions:
 If the actual contribution file is not found, the dashboard automatically falls back to placeholder data
 A warning banner will display indicating that you're viewing sample data.
 
-The default file path is: `gitlab_stats/gitlab_contributions.txt`
+The default file path is: `gitlab_contributions.txt`
+
+The fallback placeholder path is: `doc/gitlab_contributions_placeholder.txt`
 
 To use a custom file path, enter it in the text input field in the dashboard.
 
@@ -207,21 +232,26 @@ gitlab_stats/
 ├── poetry.lock             # Locked dependency versions
 ├── README.md               # This file
 ├── LICENSE                 # Project license
-├── gitlab_contributions.txt   # This file is not in the repo but needs to added and contain your gitlab data
+├── gitlab_contributions.txt   # Real activity export file used as primary local input
 ├── gitlab_stats/           # Main package
 │   ├── __init__.py
 │   ├── dashboard.py        # Streamlit dashboard UI
 │   ├── gitlab_stats_parser.py     # Core parsing and metrics engine
-│   └── gitlab_contributions_placeholder.txt  # Sample data
+│   └── dashboard_utils/
+│       ├── __init__.py
+│       ├── charts.py       # Plotly figure builders
+│       ├── helpers.py      # Shared constants/data helpers/style injection
+│       └── sections.py     # Dashboard section renderers
 ├── test/                   # Test suite
 │   ├── __init__.py
-│   └── test_gitlab_stats_parser.py
+│   └── test_gitlab_stats.py
 ├── tools/                  # Development utilities
 │   ├── after_checkout.bat  # Post-checkout setup script
 │   ├── install_poetry.bat  # Poetry installer script
 │   └── pylint_reporter.py  # Pylint reporting tool
 └── doc/                    # Documentation
     ├── changelog_prompts.txt
+    ├── gitlab_contributions_placeholder.txt
     ├── markdownlint_report.txt
     └── pylint_report.txt
 ```
