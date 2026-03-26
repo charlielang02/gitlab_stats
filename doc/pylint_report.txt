@@ -1,6 +1,6 @@
 Report
 ======
-147 statements analysed.
+459 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -8,13 +8,13 @@ Statistics by type
 +---------+-------+-----------+-----------+------------+---------+
 |type     |number |%documented |%badname |
 +=========+=======+============+=========+
-|module   |3      |100.00      |0.00     |
+|module   |7      |100.00      |0.00     |
 +---------+-------+------------+---------+
 |class    |0      |0           |0        |
 +---------+-------+------------+---------+
 |method   |0      |0           |0        |
 +---------+-------+------------+---------+
-|function |9      |100.00      |0.00     |
+|function |47     |100.00      |0.00     |
 +---------+-------+------------+---------+
 
 
@@ -24,13 +24,20 @@ External dependencies
 ::
 
 gitlab_stats
+\-dashboard_utils
+| \-charts (gitlab_stats.dashboard_utils.sections)
+| \-helpers (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.sections)
 \-gitlab_stats_parser (gitlab_stats.dashboard)
-pandas (gitlab_stats.dashboard)
-streamlit (gitlab_stats.dashboard)
+numpy (gitlab_stats.dashboard_utils.charts)
+pandas (gitlab_stats.dashboard_utils.helpers)
+plotly
+\-express (gitlab_stats.dashboard_utils.charts)
+\-graph_objects (gitlab_stats.dashboard_utils.charts)
+streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections)
 
 
 
-341 lines have been analyzed
+1171 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -38,13 +45,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |191    |56.01 |
+|code      |786    |67.12 |
 +----------+-------+------+
-|docstring |64     |18.77 |
+|docstring |190    |16.23 |
 +----------+-------+------+
-|comment   |9      |2.64  |
+|comment   |9      |0.77  |
 +----------+-------+------+
-|empty     |77     |22.58 |
+|empty     |186    |15.88 |
 +----------+-------+------+
 
 

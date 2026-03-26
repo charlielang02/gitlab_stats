@@ -21,6 +21,7 @@ packages = [{include = "gitlab_stats"}]
 
 [tool.poetry.dependencies]
 pandas = "^2.3.3"
+plotly = "^5.18.0"
 streamlit = "^1.55.0"
 
 [tool.poetry.group.dev]

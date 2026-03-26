@@ -2,114 +2,83 @@
 
 from pathlib import Path
 
-import pandas as pd
 import streamlit as st
 
+from gitlab_stats.dashboard_utils.helpers import inject_dashboard_styles
+from gitlab_stats.dashboard_utils.helpers import prepare_metric_df
+from gitlab_stats.dashboard_utils.helpers import render_main_header
+from gitlab_stats.dashboard_utils.helpers import resolve_selected_path
+from gitlab_stats.dashboard_utils.sections import render_breakdown_tabs
+from gitlab_stats.dashboard_utils.sections import render_contribution_distribution
+from gitlab_stats.dashboard_utils.sections import render_executive_summary
+from gitlab_stats.dashboard_utils.sections import render_export
+from gitlab_stats.dashboard_utils.sections import render_key_insights
+from gitlab_stats.dashboard_utils.sections import render_performance_tabs
+from gitlab_stats.dashboard_utils.sections import render_profile
+from gitlab_stats.dashboard_utils.sections import render_project_deep_dive
+from gitlab_stats.dashboard_utils.sections import render_top_projects
 from gitlab_stats.gitlab_stats_parser import _parse_gitlab_log
-
-st.set_page_config(layout="wide")
-
-st.title("GitLab Contributions Dashboard")
 
 DEFAULT_FILE_PATH = "gitlab_contributions.txt"
 PLACEHOLDER_FILE_PATH = "doc/gitlab_contributions_placeholder.txt"
 
-file_path = st.text_input(
-    "Path to contributions file",
-    value=DEFAULT_FILE_PATH,
-)
 
-if not file_path:
-    st.stop()
+def configure_page():
+    """Configure Streamlit page and shared visual styles."""
+    st.set_page_config(
+        layout="wide",
+        page_title="GitLab Contributions Dashboard",
+        initial_sidebar_state="expanded",
+    )
+    inject_dashboard_styles()
+    render_main_header()
 
-selected_path = Path(file_path)
-placeholder_path = Path(PLACEHOLDER_FILE_PATH)
-using_placeholder = False  # pylint: disable=invalid-name
 
-if not selected_path.exists():
-    if placeholder_path.exists():
-        using_placeholder = True  # pylint: disable=invalid-name
-        selected_path = placeholder_path
-    else:
+def select_data_source():
+    """Resolve source file path from user input with placeholder fallback."""
+    file_path = st.text_input(
+        "📁 Path to contributions file",
+        value=DEFAULT_FILE_PATH,
+    )
+    if not file_path:
+        st.stop()
+
+    selected_path, using_placeholder = resolve_selected_path(
+        file_path,
+        PLACEHOLDER_FILE_PATH,
+    )
+    if selected_path is None:
         st.error(
             "No contributions file was found, and the placeholder file is missing.",
         )
         st.stop()
 
-if using_placeholder:
-    st.warning(
-        "Placeholder data is currently shown. Numbers and projects are fake demo data.",
-    )
+    if using_placeholder:
+        st.warning(
+            "Placeholder data is currently shown. Numbers and projects are fake demo data.",
+        )
 
-metrics, total_metrics = _parse_gitlab_log(str(selected_path))
+    return selected_path
 
-metric_df = pd.DataFrame.from_dict(metrics, orient="index").fillna(0)
 
-ordered_categories = [
-    "commits",
-    "mr_opened",
-    "mr_merged",
-    "mr_approved",
-    "mr_commented",
-    "branch_created",
-    "branch_deleted",
-    "issue_opened",
-    "code_contributions",
-    "collab_contributions",
-    "total_contributions",
-    "code_pct",
-    "collab_pct",
-]
-ordered_columns = [col for col in ordered_categories if col in metric_df.columns]
-remaining_columns = [col for col in metric_df.columns if col not in ordered_columns]
-metric_df = metric_df[ordered_columns + remaining_columns]
+def main():
+    """Run the dashboard app."""
+    configure_page()
 
-metric_df = metric_df.sort_values(by="total_contributions", ascending=False)
+    selected_path = select_data_source()
+    metrics, total_metrics = _parse_gitlab_log(str(Path(selected_path)))
+    metric_df, ordered_columns = prepare_metric_df(metrics)
 
-st.header("Overall Summary")
+    render_executive_summary(metric_df, total_metrics)
+    render_profile(metric_df, total_metrics)
+    render_key_insights(metric_df, total_metrics)
+    render_contribution_distribution(metric_df)
+    render_breakdown_tabs(metric_df, total_metrics)
+    render_performance_tabs(metric_df)
+    render_top_projects(metric_df)
+    render_project_deep_dive(metric_df, ordered_columns)
+    render_export(metric_df)
 
-col1, col2, col3 = st.columns(3)
 
-col1.metric("Total Contributions", int(total_metrics["total_contributions"]))
-col2.metric("Code Contributions", int(total_metrics["code_contributions"]))
-col3.metric("Collaboration Contributions", int(total_metrics["collab_contributions"]))
-
-st.header("Per Project Breakdown")
-st.dataframe(metric_df)
-
-st.header("Top Projects by Contributions")
-
-top_n = st.slider("Number of projects", 5, 20, 10)
-
-st.bar_chart(metric_df["total_contributions"].head(top_n))
-
-st.header("Code vs Collaboration Split")
-
-split_df = metric_df[["code_contributions", "collab_contributions"]]
-st.bar_chart(split_df.head(top_n))
-
-st.header("Project Deep Dive")
-
-selected_project = st.selectbox("Select Project", metric_df.index)
-
-if selected_project:
-    project_data = metric_df.loc[selected_project]
-
-    st.subheader(selected_project)
-
-    st.write(project_data[ordered_columns])
-
-    st.bar_chart(
-        project_data[
-            [
-                "commits",
-                "mr_opened",
-                "mr_merged",
-                "mr_approved",
-                "mr_commented",
-                "branch_created",
-                "branch_deleted",
-                "issue_opened",
-            ]
-        ],
-    )
+if __name__ == "__main__":
+    main()
