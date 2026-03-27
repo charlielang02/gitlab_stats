@@ -26,12 +26,12 @@ from urllib.request import Request
 from urllib.request import urlopen
 
 from gitlab_stats import config
-from gitlab_stats.activity_rules import HISTORY_PUSH_THRESHOLD
-from gitlab_stats.activity_rules import INTEGRATION_BRANCH_RE
-from gitlab_stats.activity_rules import MERGE_COMMIT_TITLE_RE
-from gitlab_stats.metrics_schema import BASE_METRIC_KEYS
-from gitlab_stats.metrics_schema import TOTAL_COUNT_METRIC_KEYS
-from gitlab_stats.timeline_utils import build_timeline
+from gitlab_stats.dashboard_utils.activity_rules import HISTORY_PUSH_THRESHOLD
+from gitlab_stats.dashboard_utils.activity_rules import INTEGRATION_BRANCH_RE
+from gitlab_stats.dashboard_utils.activity_rules import MERGE_COMMIT_TITLE_RE
+from gitlab_stats.dashboard_utils.metrics_schema import BASE_METRIC_KEYS
+from gitlab_stats.dashboard_utils.metrics_schema import TOTAL_COUNT_METRIC_KEYS
+from gitlab_stats.dashboard_utils.timeline_utils import build_timeline
 
 logger = logging.getLogger(__name__)
 

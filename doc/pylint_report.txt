@@ -25,17 +25,17 @@ External dependencies
 
 dotenv (gitlab_stats.dashboard)
 gitlab_stats
-\-activity_rules (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser)
 \-config (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.sections,gitlab_stats.gitlab_stats_api_ingester)
 \-dashboard_utils
+| \-activity_rules (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser)
 | \-charts (gitlab_stats.dashboard_utils.sections)
 | \-helpers (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.sections)
+| \-metrics_schema (gitlab_stats.dashboard_utils.timeline_utils,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser)
+| \-timeline_utils (gitlab_stats.gitlab_stats_api_ingester)
 \-gitlab_stats_api_ingester (gitlab_stats.dashboard)
 \-gitlab_stats_parser (gitlab_stats.dashboard)
-\-metrics_schema (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser,gitlab_stats.timeline_utils)
-\-timeline_utils (gitlab_stats.gitlab_stats_api_ingester)
 numpy (gitlab_stats.dashboard_utils.charts)
-pandas (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.timeline_utils)
+pandas (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.dashboard_utils.timeline_utils)
 plotly
 \-express (gitlab_stats.dashboard_utils.charts)
 \-graph_objects (gitlab_stats.dashboard_utils.charts)
