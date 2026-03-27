@@ -1,5 +1,6 @@
 """Generate a Streamlit dashboard to visualize GitLab contributions metrics."""
 
+import os
 from pathlib import Path
 from time import perf_counter
 
@@ -29,6 +30,37 @@ load_dotenv()
 
 DEFAULT_FILE_PATH = "gitlab_contributions.txt"
 PLACEHOLDER_FILE_PATH = "doc/gitlab_contributions_placeholder.txt"
+CACHE_TTL_SECONDS = int(getattr(config, "DATA_CACHE_TTL_SECONDS", 1800))
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL_SECONDS)
+def _load_metrics_cached(
+    request: dict[str, object],
+):
+    """Load metrics with cache key driven by source config and inputs."""
+    use_api = bool(request.get("use_api", False))
+    selected_path = str(request.get("selected_path", ""))
+    api_base_url = str(request.get("api_base_url", ""))
+    api_token = str(request.get("api_token", ""))
+
+    if use_api and api_base_url and api_token:
+        result = fetch_metrics_from_api_with_time()
+        if result is not None:
+            metrics, total_metrics, timeline_df, timeline_meta = result
+            timeline_meta["source"] = "api"
+            return metrics, total_metrics, timeline_df, timeline_meta
+
+    if not selected_path:
+        return None
+
+    metrics, total_metrics = _parse_gitlab_log(selected_path)
+    timeline_meta = {
+        "source": "parser",
+        "has_real_dates": False,
+        "using_synthetic_timeline": False,
+    }
+    timeline_df = None
+    return metrics, total_metrics, timeline_df, timeline_meta
 
 
 def configure_page():
@@ -75,36 +107,61 @@ def get_metrics():
     Returns:
         Tuple of metrics, totals, timeline dataframe, and timeline metadata.
     """
+    api_base_url = os.getenv("GITLAB_API_BASE_URL", "")
+    api_token = os.getenv("GITLAB_API_TOKEN", "")
+
     if config.USE_API:
         api_start = perf_counter()
         with st.spinner("Fetching metrics from GitLab API..."):
-            result = fetch_metrics_from_api_with_time()
+            result = _load_metrics_cached(
+                {
+                    "use_api": True,
+                    "selected_path": "",
+                    "parser_file_mtime_ns": 0,
+                    "api_base_url": api_base_url,
+                    "api_token": api_token,
+                    "api_lookback_days": config.API_LOOKBACK_DAYS,
+                    "api_events_per_page": config.API_EVENTS_PER_PAGE,
+                    "api_max_event_pages": config.API_MAX_EVENT_PAGES,
+                },
+            )
         api_elapsed = perf_counter() - api_start
 
         if result is not None:
-            metrics, total_metrics, timeline_df, timeline_meta = result
-            timeline_meta["source"] = "api"
             if config.SHOW_DATA_SOURCE_INFO:
                 st.info(f"📊 Metrics loaded from GitLab API in {api_elapsed:.2f}s")
-            return metrics, total_metrics, timeline_df, timeline_meta
+            if st.button("Refresh Data Cache", key="refresh_cache_api"):
+                st.cache_data.clear()
+                st.rerun()
+            return result
 
         st.warning("API data unavailable. Falling back to local parser data.")
 
     selected_path = select_data_source()
+    parser_path = Path(selected_path)
+    parser_mtime_ns = parser_path.stat().st_mtime_ns if parser_path.exists() else 0
     parser_start = perf_counter()
     with st.spinner("Parsing local contributions file..."):
-        metrics, total_metrics = _parse_gitlab_log(str(Path(selected_path)))
+        result = _load_metrics_cached(
+            {
+                "use_api": False,
+                "selected_path": str(parser_path),
+                "parser_file_mtime_ns": parser_mtime_ns,
+                "api_base_url": api_base_url,
+                "api_token": api_token,
+                "api_lookback_days": config.API_LOOKBACK_DAYS,
+                "api_events_per_page": config.API_EVENTS_PER_PAGE,
+                "api_max_event_pages": config.API_MAX_EVENT_PAGES,
+            },
+        )
     parser_elapsed = perf_counter() - parser_start
 
     if config.SHOW_DATA_SOURCE_INFO:
         st.info(f"📄 Metrics loaded from local file parser in {parser_elapsed:.2f}s")
-    timeline_meta = {
-        "source": "parser",
-        "has_real_dates": False,
-        "using_synthetic_timeline": False,
-    }
-    timeline_df = None
-    return metrics, total_metrics, timeline_df, timeline_meta
+        if st.button("Refresh Data Cache", key="refresh_cache_parser"):
+            st.cache_data.clear()
+            st.rerun()
+    return result
 
 
 def main():
