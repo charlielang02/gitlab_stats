@@ -1,6 +1,6 @@
 Report
 ======
-997 statements analysed.
+1018 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -14,7 +14,7 @@ Statistics by type
 +---------+-------+------------+---------+
 |method   |0      |0           |0        |
 +---------+-------+------------+---------+
-|function |81     |100.00      |0.00     |
+|function |83     |100.00      |0.00     |
 +---------+-------+------------+---------+
 
 
@@ -39,11 +39,11 @@ pandas (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.helpers
 plotly
 \-express (gitlab_stats.dashboard_utils.charts)
 \-graph_objects (gitlab_stats.dashboard_utils.charts)
-streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections)
+streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.gitlab_stats_api_ingester)
 
 
 
-2259 lines have been analyzed
+2299 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -51,13 +51,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |1546   |68.44 |
+|code      |1576   |68.55 |
 +----------+-------+------+
-|docstring |301    |13.32 |
+|docstring |303    |13.18 |
 +----------+-------+------+
-|comment   |24     |1.06  |
+|comment   |24     |1.04  |
 +----------+-------+------+
-|empty     |388    |17.18 |
+|empty     |396    |17.22 |
 +----------+-------+------+
 
 
