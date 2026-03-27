@@ -516,7 +516,44 @@ def render_export(metric_df):
     """Render one-click CSV export."""
     st.markdown("---")
     st.header("📥 Data Export")
-    csv_data = metric_df.to_csv(index=True)
+
+    export_metrics = metric_df.reset_index().rename(columns={"index": "project"})
+    export_metrics.insert(0, "row_type", "project_metric")
+
+    csv_data = export_metrics.to_csv(index=False)
+    st.download_button(
+        label="Download Full Dataset as CSV",
+        data=csv_data,
+        file_name="gitlab_contributions_export.csv",
+        mime="text/csv",
+    )
+
+
+def render_export_with_timeline(metric_df, timeline_df):
+    """Render one-click CSV export including optional timeline rows."""
+    st.markdown("---")
+    st.header("📥 Data Export")
+
+    export_metrics = metric_df.reset_index().rename(columns={"index": "project"})
+    export_metrics.insert(0, "row_type", "project_metric")
+
+    if timeline_df is None or timeline_df.empty:
+        export_data = export_metrics
+    else:
+        export_timeline = timeline_df.copy()
+        export_timeline["event_date"] = pd.to_datetime(
+            export_timeline["event_date"],
+            errors="coerce",
+        ).dt.strftime("%Y-%m-%d")
+        export_timeline.insert(0, "row_type", "timeline_day")
+        export_timeline.insert(1, "project", "")
+        export_data = pd.concat(
+            [export_metrics, export_timeline],
+            ignore_index=True,
+            sort=False,
+        )
+
+    csv_data = export_data.to_csv(index=False)
     st.download_button(
         label="Download Full Dataset as CSV",
         data=csv_data,
