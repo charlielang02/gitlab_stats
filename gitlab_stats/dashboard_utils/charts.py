@@ -1,6 +1,7 @@
 """Chart builder functions for dashboard visualizations."""
 
 import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -15,13 +16,24 @@ from gitlab_stats.dashboard_utils.helpers import SECONDARY
 
 def build_pareto_chart(metric_df):
     """Build cumulative contribution Pareto line chart."""
-    cumulative = (
-        metric_df["total_contributions"].cumsum()
-        / metric_df["total_contributions"].sum()
-    )
+    total = metric_df["total_contributions"].sum()
+    if total <= 0:
+        return px.line(
+            x=[0],
+            y=[0],
+            labels={"x": "Projects", "y": "Cumulative Contribution %"},
+            title="Contribution Concentration (Pareto)",
+        )
+
+    cumulative = metric_df["total_contributions"].cumsum() / total
+    x_values = np.arange(1, len(cumulative) + 1)
+    y_values = (100 * cumulative).to_numpy()
+
+    x_with_baseline = np.insert(x_values, 0, 0)
+    y_with_baseline = np.insert(y_values, 0, 0.0)
     return px.line(
-        x=range(len(cumulative)),
-        y=100 * cumulative,
+        x=x_with_baseline,
+        y=y_with_baseline,
         labels={"x": "Projects", "y": "Cumulative Contribution %"},
         title="Contribution Concentration (Pareto)",
     )
@@ -303,4 +315,83 @@ def build_project_activity_bar(project_data):
         height=400,
         xaxis_tickangle=-45,
     )
+    return fig
+
+
+def build_daily_activity_trend(timeline_df):
+    """Build daily activity line chart with 7-day moving average."""
+    timeline = timeline_df.copy()
+    timeline["event_date"] = pd.to_datetime(timeline["event_date"])
+    timeline = timeline.sort_values("event_date")
+    timeline["rolling_7d"] = (
+        timeline["total_contributions"].rolling(7, min_periods=1).mean()
+    )
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=timeline["event_date"],
+            y=timeline["total_contributions"],
+            mode="lines",
+            name="Daily Total",
+            line={"color": PRIMARY, "width": 2},
+        ),
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=timeline["event_date"],
+            y=timeline["rolling_7d"],
+            mode="lines",
+            name="7-Day Average",
+            line={"color": SECONDARY, "width": 2, "dash": "dash"},
+        ),
+    )
+    fig.update_layout(height=380, xaxis_title="Date", yaxis_title="Contributions")
+    return fig
+
+
+def build_weekly_mix_chart(timeline_df):
+    """Build weekly stacked bar chart for code vs collaboration mix."""
+    timeline = timeline_df.copy()
+    timeline["event_date"] = pd.to_datetime(timeline["event_date"])
+    weekly = (
+        timeline.set_index("event_date")[["code_contributions", "collab_contributions"]]
+        .resample("W-MON")
+        .sum()
+        .reset_index()
+    )
+
+    fig = px.bar(
+        weekly,
+        x="event_date",
+        y=["code_contributions", "collab_contributions"],
+        labels={"event_date": "Week", "value": "Contributions", "variable": "Type"},
+        color_discrete_map={
+            "code_contributions": PRIMARY,
+            "collab_contributions": SECONDARY,
+        },
+    )
+    fig.update_layout(height=380, barmode="stack")
+    return fig
+
+
+def build_monthly_volume_chart(timeline_df):
+    """Build monthly contribution volume bar chart."""
+    timeline = timeline_df.copy()
+    timeline["event_date"] = pd.to_datetime(timeline["event_date"])
+    monthly = (
+        timeline.set_index("event_date")[["total_contributions"]]
+        .resample("MS")
+        .sum()
+        .reset_index()
+    )
+
+    fig = px.bar(
+        monthly,
+        x="event_date",
+        y="total_contributions",
+        labels={"event_date": "Month", "total_contributions": "Contributions"},
+        color_discrete_sequence=[ACCENT],
+    )
+    fig.update_layout(height=360)
     return fig

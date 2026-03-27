@@ -24,6 +24,9 @@ HEATMAP_SCALE = [
     [1.0, "#4a0b44"],
 ]
 
+# Show "Balanced" when the code/collaboration split is within this percent window.
+BALANCED_HYSTERESIS_PCT = 10.0
+
 ORDERED_CATEGORIES = [
     "commits",
     "mr_opened",
@@ -141,16 +144,30 @@ def prepare_metric_df(metrics):
 
 def compute_profile_summary(metric_df, total_metrics):
     """Compute profile-level narrative summary fields."""
-    dominant_style = (
-        "Code-Heavy"
-        if total_metrics["code_contributions"] > total_metrics["collab_contributions"]
-        else "Collaboration-Heavy"
-    )
-    signal = (
-        "High Commit Velocity"
-        if metric_df["commits"].mean() > metric_df["collab_contributions"].mean()
-        else "High Collaboration Activity"
-    )
+    if metric_df.empty:
+        return "No Activity", "N/A", "No Activity Detected"
+
+    code_total = float(total_metrics.get("code_contributions", 0))
+    collab_total = float(total_metrics.get("collab_contributions", 0))
+    total = code_total + collab_total
+
+    if total <= 0:
+        return "No Activity", metric_df.index[0], "No Activity Detected"
+
+    code_pct = 100.0 * code_total / total
+    collab_pct = 100.0 * collab_total / total
+    pct_diff = abs(code_pct - collab_pct)
+
+    if pct_diff <= BALANCED_HYSTERESIS_PCT:
+        dominant_style = "Balanced"
+        signal = "Balanced Activity Mix"
+    elif code_total > collab_total:
+        dominant_style = "Code-Heavy"
+        signal = "High Commit Velocity"
+    else:
+        dominant_style = "Collaboration-Heavy"
+        signal = "High Collaboration Activity"
+
     return dominant_style, metric_df.index[0], signal
 
 
