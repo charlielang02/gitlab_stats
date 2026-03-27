@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from gitlab_stats.metrics_schema import BASE_METRIC_KEYS
+from gitlab_stats.dashboard_utils.metrics_schema import BASE_METRIC_KEYS
 
 if TYPE_CHECKING:
     from datetime import date
