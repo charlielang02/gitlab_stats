@@ -1,22 +1,27 @@
 """Generate a Streamlit dashboard to visualize GitLab contributions metrics."""
 
+import io
 import os
 from pathlib import Path
 from time import perf_counter
 
+import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
 from gitlab_stats import config
+from gitlab_stats.dashboard_utils.helpers import ORDERED_CATEGORIES
 from gitlab_stats.dashboard_utils.helpers import inject_dashboard_styles
 from gitlab_stats.dashboard_utils.helpers import prepare_metric_df
 from gitlab_stats.dashboard_utils.helpers import render_main_header
 from gitlab_stats.dashboard_utils.helpers import resolve_selected_path
+from gitlab_stats.dashboard_utils.metrics_schema import BASE_METRIC_KEYS
+from gitlab_stats.dashboard_utils.metrics_schema import TOTAL_COUNT_METRIC_KEYS
 from gitlab_stats.dashboard_utils.sections import render_behavior_analysis
 from gitlab_stats.dashboard_utils.sections import render_breakdown_tabs
 from gitlab_stats.dashboard_utils.sections import render_contribution_distribution
 from gitlab_stats.dashboard_utils.sections import render_executive_summary
-from gitlab_stats.dashboard_utils.sections import render_export
+from gitlab_stats.dashboard_utils.sections import render_export_with_timeline
 from gitlab_stats.dashboard_utils.sections import render_key_insights
 from gitlab_stats.dashboard_utils.sections import render_performance_tabs
 from gitlab_stats.dashboard_utils.sections import render_profile
@@ -41,6 +46,183 @@ def _normalize_metrics_for_cache(metrics, total_metrics):
     }
     normalized_totals = {str(key): value for key, value in dict(total_metrics).items()}
     return normalized_metrics, normalized_totals
+
+
+def _totals_from_metric_df(metric_df):
+    """Compute aggregated totals from a per-project metrics dataframe."""
+    total_metrics = {}
+    for key in TOTAL_COUNT_METRIC_KEYS:
+        if key in metric_df.columns:
+            total_metrics[key] = float(metric_df[key].fillna(0).sum())
+        else:
+            total_metrics[key] = 0.0
+
+    total = float(total_metrics.get("total_contributions", 0.0))
+    if total > 0:
+        total_metrics["code_pct"] = round(
+            100.0 * float(total_metrics.get("code_contributions", 0.0)) / total,
+            1,
+        )
+        total_metrics["collab_pct"] = round(
+            100.0 * float(total_metrics.get("collab_contributions", 0.0)) / total,
+            1,
+        )
+    else:
+        total_metrics["code_pct"] = 0.0
+        total_metrics["collab_pct"] = 0.0
+
+    return total_metrics
+
+
+def _normalize_uploaded_metric_df(metric_df):
+    """Normalize uploaded metric dataframe to required dashboard fields."""
+    if "project" in metric_df.columns:
+        metric_df = metric_df.set_index("project")
+    elif "Unnamed: 0" in metric_df.columns:
+        metric_df = metric_df.set_index("Unnamed: 0")
+    elif metric_df.columns[0] not in set(BASE_METRIC_KEYS):
+        metric_df = metric_df.set_index(metric_df.columns[0])
+
+    numeric_columns = list(ORDERED_CATEGORIES)
+    for column in numeric_columns:
+        if column in metric_df.columns:
+            metric_df[column] = pd.to_numeric(
+                metric_df[column],
+                errors="coerce",
+            ).fillna(0)
+
+    if "code_contributions" not in metric_df.columns:
+        metric_df["code_contributions"] = (
+            metric_df.get("commits", 0)
+            + metric_df.get("branch_created", 0)
+            + metric_df.get("branch_deleted", 0)
+        )
+    if "collab_contributions" not in metric_df.columns:
+        metric_df["collab_contributions"] = (
+            metric_df.get("mr_opened", 0)
+            + metric_df.get("mr_merged", 0)
+            + metric_df.get("mr_approved", 0)
+            + metric_df.get("mr_commented", 0)
+            + metric_df.get("issue_opened", 0)
+        )
+    if "total_contributions" not in metric_df.columns:
+        metric_df["total_contributions"] = (
+            metric_df["code_contributions"] + metric_df["collab_contributions"]
+        )
+
+    non_zero = metric_df["total_contributions"] > 0
+    metric_df = metric_df[non_zero].copy()
+    total = metric_df["total_contributions"].replace(0, pd.NA)
+    metric_df["code_pct"] = (
+        (100.0 * metric_df["code_contributions"] / total).fillna(0).round(1)
+    )
+    metric_df["collab_pct"] = (
+        (100.0 * metric_df["collab_contributions"] / total).fillna(0).round(1)
+    )
+
+    metric_df.index = metric_df.index.astype(str)
+    return metric_df
+
+
+def _timeline_from_uploaded_df(uploaded_df):
+    """Build timeline payload from uploaded CSV rows if present."""
+    if "row_type" not in uploaded_df.columns:
+        return None, {
+            "source": "uploaded_csv",
+            "has_real_dates": False,
+            "using_synthetic_timeline": False,
+        }
+
+    timeline_rows = uploaded_df[uploaded_df["row_type"] == "timeline_day"].copy()
+    if timeline_rows.empty:
+        return None, {
+            "source": "uploaded_csv",
+            "has_real_dates": False,
+            "using_synthetic_timeline": False,
+        }
+
+    drop_cols = [
+        column for column in ("row_type", "project") if column in timeline_rows.columns
+    ]
+    timeline_rows = timeline_rows.drop(columns=drop_cols)
+    if "event_date" not in timeline_rows.columns:
+        return None, {
+            "source": "uploaded_csv",
+            "has_real_dates": False,
+            "using_synthetic_timeline": False,
+        }
+
+    timeline_rows["event_date"] = pd.to_datetime(
+        timeline_rows["event_date"],
+        errors="coerce",
+    )
+    timeline_rows = timeline_rows.dropna(subset=["event_date"])
+    if timeline_rows.empty:
+        return None, {
+            "source": "uploaded_csv",
+            "has_real_dates": False,
+            "using_synthetic_timeline": False,
+        }
+
+    numeric_columns = [
+        *BASE_METRIC_KEYS,
+        "code_contributions",
+        "collab_contributions",
+        "total_contributions",
+    ]
+    for column in numeric_columns:
+        if column in timeline_rows.columns:
+            timeline_rows[column] = pd.to_numeric(
+                timeline_rows[column],
+                errors="coerce",
+            ).fillna(0)
+
+    timeline_df = timeline_rows.sort_values("event_date").reset_index(drop=True)
+    period_start = timeline_df["event_date"].min().date().isoformat()
+    period_end = timeline_df["event_date"].max().date().isoformat()
+    expected_days = (
+        int(
+            (timeline_df["event_date"].max() - timeline_df["event_date"].min()).days,
+        )
+        + 1
+    )
+
+    return timeline_df, {
+        "source": "uploaded_csv",
+        "has_real_dates": True,
+        "using_synthetic_timeline": False,
+        "period_start": period_start,
+        "period_end": period_end,
+        "expected_days": expected_days,
+    }
+
+
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL_SECONDS)
+def _load_uploaded_metrics_csv(csv_bytes):
+    """Parse uploaded CSV bytes into dashboard metric payloads."""
+    uploaded_df = pd.read_csv(io.BytesIO(csv_bytes))
+    if uploaded_df.empty:
+        return None
+
+    if "row_type" in uploaded_df.columns:
+        metric_rows = uploaded_df[uploaded_df["row_type"] == "project_metric"].copy()
+        if metric_rows.empty:
+            return None
+        drop_cols = [
+            column for column in ("row_type",) if column in metric_rows.columns
+        ]
+        metric_rows = metric_rows.drop(columns=drop_cols)
+    else:
+        metric_rows = uploaded_df
+
+    normalized_df = _normalize_uploaded_metric_df(metric_rows)
+    if normalized_df.empty:
+        return None
+
+    metrics = normalized_df.to_dict(orient="index")
+    total_metrics = _totals_from_metric_df(normalized_df)
+    timeline_df, timeline_meta = _timeline_from_uploaded_df(uploaded_df)
+    return metrics, total_metrics, timeline_df, timeline_meta
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL_SECONDS)
@@ -125,6 +307,21 @@ def get_metrics():
     Returns:
         Tuple of metrics, totals, timeline dataframe, and timeline metadata.
     """
+    uploaded_metrics = st.file_uploader(
+        "Upload metrics CSV (alternative data source)",
+        type=["csv"],
+        help="Use a previously exported dashboard CSV when API/network access is unavailable.",
+    )
+
+    if uploaded_metrics is not None:
+        with st.spinner("Loading uploaded CSV metrics..."):
+            uploaded_result = _load_uploaded_metrics_csv(uploaded_metrics.getvalue())
+        if uploaded_result is None:
+            st.error("Uploaded CSV is empty or does not contain usable metric columns.")
+            st.stop()
+        st.info("📄 Metrics loaded from uploaded CSV file")
+        return uploaded_result
+
     api_base_url = os.getenv("GITLAB_API_BASE_URL", "")
     api_token = os.getenv("GITLAB_API_TOKEN", "")
 
@@ -198,7 +395,7 @@ def main():
     render_performance_tabs(metric_df)
     render_top_projects(metric_df)
     render_project_deep_dive(metric_df, ordered_columns)
-    render_export(metric_df)
+    render_export_with_timeline(metric_df, timeline_df)
 
 
 if __name__ == "__main__":
