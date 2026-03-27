@@ -1,6 +1,6 @@
 Report
 ======
-147 statements analysed.
+997 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -8,13 +8,13 @@ Statistics by type
 +---------+-------+-----------+-----------+------------+---------+
 |type     |number |%documented |%badname |
 +=========+=======+============+=========+
-|module   |3      |100.00      |0.00     |
+|module   |12     |100.00      |0.00     |
 +---------+-------+------------+---------+
 |class    |0      |0           |0        |
 +---------+-------+------------+---------+
 |method   |0      |0           |0        |
 +---------+-------+------------+---------+
-|function |9      |100.00      |0.00     |
+|function |81     |100.00      |0.00     |
 +---------+-------+------------+---------+
 
 
@@ -23,14 +23,27 @@ External dependencies
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 ::
 
+dotenv (gitlab_stats.dashboard)
 gitlab_stats
+\-activity_rules (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser)
+\-config (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.sections,gitlab_stats.gitlab_stats_api_ingester)
+\-dashboard_utils
+| \-charts (gitlab_stats.dashboard_utils.sections)
+| \-helpers (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.sections)
+\-gitlab_stats_api_ingester (gitlab_stats.dashboard)
 \-gitlab_stats_parser (gitlab_stats.dashboard)
-pandas (gitlab_stats.dashboard)
-streamlit (gitlab_stats.dashboard)
+\-metrics_schema (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser,gitlab_stats.timeline_utils)
+\-timeline_utils (gitlab_stats.gitlab_stats_api_ingester)
+numpy (gitlab_stats.dashboard_utils.charts)
+pandas (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.timeline_utils)
+plotly
+\-express (gitlab_stats.dashboard_utils.charts)
+\-graph_objects (gitlab_stats.dashboard_utils.charts)
+streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections)
 
 
 
-341 lines have been analyzed
+2259 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -38,13 +51,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |191    |56.01 |
+|code      |1546   |68.44 |
 +----------+-------+------+
-|docstring |64     |18.77 |
+|docstring |301    |13.32 |
 +----------+-------+------+
-|comment   |9      |2.64  |
+|comment   |24     |1.06  |
 +----------+-------+------+
-|empty     |77     |22.58 |
+|empty     |388    |17.18 |
 +----------+-------+------+
 
 

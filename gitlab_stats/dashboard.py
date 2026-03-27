@@ -1,115 +1,187 @@
 """Generate a Streamlit dashboard to visualize GitLab contributions metrics."""
 
+import os
 from pathlib import Path
+from time import perf_counter
 
-import pandas as pd
 import streamlit as st
+from dotenv import load_dotenv
 
+from gitlab_stats import config
+from gitlab_stats.dashboard_utils.helpers import inject_dashboard_styles
+from gitlab_stats.dashboard_utils.helpers import prepare_metric_df
+from gitlab_stats.dashboard_utils.helpers import render_main_header
+from gitlab_stats.dashboard_utils.helpers import resolve_selected_path
+from gitlab_stats.dashboard_utils.sections import render_behavior_analysis
+from gitlab_stats.dashboard_utils.sections import render_breakdown_tabs
+from gitlab_stats.dashboard_utils.sections import render_contribution_distribution
+from gitlab_stats.dashboard_utils.sections import render_executive_summary
+from gitlab_stats.dashboard_utils.sections import render_export
+from gitlab_stats.dashboard_utils.sections import render_key_insights
+from gitlab_stats.dashboard_utils.sections import render_performance_tabs
+from gitlab_stats.dashboard_utils.sections import render_profile
+from gitlab_stats.dashboard_utils.sections import render_project_deep_dive
+from gitlab_stats.dashboard_utils.sections import render_top_projects
+from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_api_with_time
 from gitlab_stats.gitlab_stats_parser import _parse_gitlab_log
 
-st.set_page_config(layout="wide")
-
-st.title("GitLab Contributions Dashboard")
+# Load environment variables from .env file if it exists
+load_dotenv()
 
 DEFAULT_FILE_PATH = "gitlab_contributions.txt"
 PLACEHOLDER_FILE_PATH = "doc/gitlab_contributions_placeholder.txt"
+CACHE_TTL_SECONDS = int(getattr(config, "DATA_CACHE_TTL_SECONDS", 1800))
 
-file_path = st.text_input(
-    "Path to contributions file",
-    value=DEFAULT_FILE_PATH,
-)
 
-if not file_path:
-    st.stop()
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL_SECONDS)
+def _load_metrics_cached(
+    request: dict[str, object],
+):
+    """Load metrics with cache key driven by source config and inputs."""
+    use_api = bool(request.get("use_api", False))
+    selected_path = str(request.get("selected_path", ""))
+    api_base_url = str(request.get("api_base_url", ""))
+    api_token = str(request.get("api_token", ""))
 
-selected_path = Path(file_path)
-placeholder_path = Path(PLACEHOLDER_FILE_PATH)
-using_placeholder = False  # pylint: disable=invalid-name
+    if use_api and api_base_url and api_token:
+        result = fetch_metrics_from_api_with_time()
+        if result is not None:
+            metrics, total_metrics, timeline_df, timeline_meta = result
+            timeline_meta["source"] = "api"
+            return metrics, total_metrics, timeline_df, timeline_meta
 
-if not selected_path.exists():
-    if placeholder_path.exists():
-        using_placeholder = True  # pylint: disable=invalid-name
-        selected_path = placeholder_path
-    else:
+    if not selected_path:
+        return None
+
+    metrics, total_metrics = _parse_gitlab_log(selected_path)
+    timeline_meta = {
+        "source": "parser",
+        "has_real_dates": False,
+        "using_synthetic_timeline": False,
+    }
+    timeline_df = None
+    return metrics, total_metrics, timeline_df, timeline_meta
+
+
+def configure_page():
+    """Configure Streamlit page and shared visual styles."""
+    st.set_page_config(
+        layout="wide",
+        page_title="GitLab Contributions Dashboard",
+        initial_sidebar_state="expanded",
+    )
+    inject_dashboard_styles()
+    render_main_header()
+
+
+def select_data_source():
+    """Resolve source file path from user input with placeholder fallback."""
+    file_path = st.text_input(
+        "📁 Path to contributions file",
+        value=DEFAULT_FILE_PATH,
+    )
+    if not file_path:
+        st.stop()
+
+    selected_path, using_placeholder = resolve_selected_path(
+        file_path,
+        PLACEHOLDER_FILE_PATH,
+    )
+    if selected_path is None:
         st.error(
             "No contributions file was found, and the placeholder file is missing.",
         )
         st.stop()
 
-if using_placeholder:
-    st.warning(
-        "Placeholder data is currently shown. Numbers and projects are fake demo data.",
-    )
+    if using_placeholder:
+        st.warning(
+            "Placeholder data is currently shown. Numbers and projects are fake demo data.",
+        )
 
-metrics, total_metrics = _parse_gitlab_log(str(selected_path))
+    return selected_path
 
-metric_df = pd.DataFrame.from_dict(metrics, orient="index").fillna(0)
 
-ordered_categories = [
-    "commits",
-    "mr_opened",
-    "mr_merged",
-    "mr_approved",
-    "mr_commented",
-    "branch_created",
-    "branch_deleted",
-    "issue_opened",
-    "code_contributions",
-    "collab_contributions",
-    "total_contributions",
-    "code_pct",
-    "collab_pct",
-]
-ordered_columns = [col for col in ordered_categories if col in metric_df.columns]
-remaining_columns = [col for col in metric_df.columns if col not in ordered_columns]
-metric_df = metric_df[ordered_columns + remaining_columns]
+def get_metrics():
+    """Fetch metrics from configured source (API with fallback to parser).
 
-metric_df = metric_df.sort_values(by="total_contributions", ascending=False)
+    Returns:
+        Tuple of metrics, totals, timeline dataframe, and timeline metadata.
+    """
+    api_base_url = os.getenv("GITLAB_API_BASE_URL", "")
+    api_token = os.getenv("GITLAB_API_TOKEN", "")
 
-st.header("Overall Summary")
+    if config.USE_API:
+        api_start = perf_counter()
+        with st.spinner("Fetching metrics from GitLab API..."):
+            result = _load_metrics_cached(
+                {
+                    "use_api": True,
+                    "selected_path": "",
+                    "parser_file_mtime_ns": 0,
+                    "api_base_url": api_base_url,
+                    "api_token": api_token,
+                    "api_lookback_days": config.API_LOOKBACK_DAYS,
+                    "api_events_per_page": config.API_EVENTS_PER_PAGE,
+                    "api_max_event_pages": config.API_MAX_EVENT_PAGES,
+                },
+            )
+        api_elapsed = perf_counter() - api_start
 
-col1, col2, col3 = st.columns(3)
+        if result is not None:
+            if config.SHOW_DATA_SOURCE_INFO:
+                st.info(f"📊 Metrics loaded from GitLab API in {api_elapsed:.2f}s")
+            if st.button("Refresh Data Cache", key="refresh_cache_api"):
+                st.cache_data.clear()
+                st.rerun()
+            return result
 
-col1.metric("Total Contributions", int(total_metrics["total_contributions"]))
-col2.metric("Code Contributions", int(total_metrics["code_contributions"]))
-col3.metric("Collaboration Contributions", int(total_metrics["collab_contributions"]))
+        st.warning("API data unavailable. Falling back to local parser data.")
 
-st.header("Per Project Breakdown")
-st.dataframe(metric_df)
+    selected_path = select_data_source()
+    parser_path = Path(selected_path)
+    parser_mtime_ns = parser_path.stat().st_mtime_ns if parser_path.exists() else 0
+    parser_start = perf_counter()
+    with st.spinner("Parsing local contributions file..."):
+        result = _load_metrics_cached(
+            {
+                "use_api": False,
+                "selected_path": str(parser_path),
+                "parser_file_mtime_ns": parser_mtime_ns,
+                "api_base_url": api_base_url,
+                "api_token": api_token,
+                "api_lookback_days": config.API_LOOKBACK_DAYS,
+                "api_events_per_page": config.API_EVENTS_PER_PAGE,
+                "api_max_event_pages": config.API_MAX_EVENT_PAGES,
+            },
+        )
+    parser_elapsed = perf_counter() - parser_start
 
-st.header("Top Projects by Contributions")
+    if config.SHOW_DATA_SOURCE_INFO:
+        st.info(f"📄 Metrics loaded from local file parser in {parser_elapsed:.2f}s")
+        if st.button("Refresh Data Cache", key="refresh_cache_parser"):
+            st.cache_data.clear()
+            st.rerun()
+    return result
 
-top_n = st.slider("Number of projects", 5, 20, 10)
 
-st.bar_chart(metric_df["total_contributions"].head(top_n))
+def main():
+    """Run the dashboard app."""
+    configure_page()
 
-st.header("Code vs Collaboration Split")
+    metrics, total_metrics, timeline_df, timeline_meta = get_metrics()
+    metric_df, ordered_columns = prepare_metric_df(metrics)
 
-split_df = metric_df[["code_contributions", "collab_contributions"]]
-st.bar_chart(split_df.head(top_n))
+    render_executive_summary(metric_df, total_metrics)
+    render_profile(metric_df, total_metrics)
+    render_behavior_analysis(timeline_df, timeline_meta)
+    render_key_insights(metric_df, total_metrics)
+    render_contribution_distribution(metric_df)
+    render_breakdown_tabs(metric_df, total_metrics)
+    render_performance_tabs(metric_df)
+    render_top_projects(metric_df)
+    render_project_deep_dive(metric_df, ordered_columns)
+    render_export(metric_df)
 
-st.header("Project Deep Dive")
 
-selected_project = st.selectbox("Select Project", metric_df.index)
-
-if selected_project:
-    project_data = metric_df.loc[selected_project]
-
-    st.subheader(selected_project)
-
-    st.write(project_data[ordered_columns])
-
-    st.bar_chart(
-        project_data[
-            [
-                "commits",
-                "mr_opened",
-                "mr_merged",
-                "mr_approved",
-                "mr_commented",
-                "branch_created",
-                "branch_deleted",
-                "issue_opened",
-            ]
-        ],
-    )
+if __name__ == "__main__":
+    main()
