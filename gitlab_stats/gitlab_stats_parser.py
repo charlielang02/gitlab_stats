@@ -4,6 +4,10 @@ prints a summary of contributions per project and total contributions."""
 import re
 from collections import defaultdict
 
+from gitlab_stats.metrics_schema import BASE_METRIC_KEYS
+from gitlab_stats.metrics_schema import PERCENTAGE_METRIC_KEYS
+from gitlab_stats.metrics_schema import TOTAL_COUNT_METRIC_KEYS
+
 # --- Regex patterns ---
 PROJECT_RE = re.compile(r"at (.+)")
 MORE_COMMITS_RE = re.compile(r"\.\.\. and (\d+) more commits")
@@ -123,19 +127,7 @@ def _parse_gitlab_log(file_path):
             data["collab_pct"] = 0.0
 
         # Sum only count-based values across projects.
-        for key in (
-            "commits",
-            "branch_created",
-            "branch_deleted",
-            "mr_opened",
-            "mr_merged",
-            "mr_approved",
-            "mr_commented",
-            "issue_opened",
-            "code_contributions",
-            "collab_contributions",
-            "total_contributions",
-        ):
+        for key in TOTAL_COUNT_METRIC_KEYS:
             total_metrics[key] += data.get(key, 0)
 
     # Recompute percentages for the aggregated totals only.
@@ -160,16 +152,7 @@ def _parse_gitlab_log(file_path):
 
 
 def _print_summary(metrics, total_metrics):
-    base_order = [
-        "commits",
-        "branch_created",
-        "branch_deleted",
-        "mr_opened",
-        "mr_merged",
-        "mr_approved",
-        "mr_commented",
-        "issue_opened",
-    ]
+    base_order = list(BASE_METRIC_KEYS)
 
     total_order = [
         "code_contributions",
@@ -177,10 +160,7 @@ def _print_summary(metrics, total_metrics):
         "total_contributions",
     ]
 
-    pct_order = [
-        "code_pct",
-        "collab_pct",
-    ]
+    pct_order = list(PERCENTAGE_METRIC_KEYS)
 
     def print_ordered(data):
         # Base stats

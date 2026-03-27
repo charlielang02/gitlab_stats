@@ -3,7 +3,9 @@
 from pathlib import Path
 
 import streamlit as st
+from dotenv import load_dotenv
 
+from gitlab_stats import config
 from gitlab_stats.dashboard_utils.helpers import inject_dashboard_styles
 from gitlab_stats.dashboard_utils.helpers import prepare_metric_df
 from gitlab_stats.dashboard_utils.helpers import render_main_header
@@ -17,7 +19,11 @@ from gitlab_stats.dashboard_utils.sections import render_performance_tabs
 from gitlab_stats.dashboard_utils.sections import render_profile
 from gitlab_stats.dashboard_utils.sections import render_project_deep_dive
 from gitlab_stats.dashboard_utils.sections import render_top_projects
+from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_api
 from gitlab_stats.gitlab_stats_parser import _parse_gitlab_log
+
+# Load environment variables from .env file if it exists
+load_dotenv()
 
 DEFAULT_FILE_PATH = "gitlab_contributions.txt"
 PLACEHOLDER_FILE_PATH = "doc/gitlab_contributions_placeholder.txt"
@@ -61,12 +67,31 @@ def select_data_source():
     return selected_path
 
 
+def get_metrics():
+    """Fetch metrics from configured source (API with fallback to parser).
+
+    Returns:
+        Tuple of (metrics, total_metrics) dicts compatible with dashboard rendering.
+    """
+    if config.USE_API:
+        result = fetch_metrics_from_api()
+        if result is not None:
+            if config.SHOW_DATA_SOURCE_INFO:
+                st.info("📊 Metrics loaded from GitLab API")
+            return result
+
+    selected_path = select_data_source()
+    metrics, total_metrics = _parse_gitlab_log(str(Path(selected_path)))
+    if config.SHOW_DATA_SOURCE_INFO:
+        st.info("📄 Metrics loaded from local file parser")
+    return metrics, total_metrics
+
+
 def main():
     """Run the dashboard app."""
     configure_page()
 
-    selected_path = select_data_source()
-    metrics, total_metrics = _parse_gitlab_log(str(Path(selected_path)))
+    metrics, total_metrics = get_metrics()
     metric_df, ordered_columns = prepare_metric_df(metrics)
 
     render_executive_summary(metric_df, total_metrics)

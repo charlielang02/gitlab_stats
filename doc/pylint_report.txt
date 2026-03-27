@@ -1,6 +1,6 @@
 Report
 ======
-459 statements analysed.
+685 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -8,13 +8,13 @@ Statistics by type
 +---------+-------+-----------+-----------+------------+---------+
 |type     |number |%documented |%badname |
 +=========+=======+============+=========+
-|module   |7      |100.00      |0.00     |
+|module   |10     |100.00      |0.00     |
 +---------+-------+------------+---------+
 |class    |0      |0           |0        |
 +---------+-------+------------+---------+
 |method   |0      |0           |0        |
 +---------+-------+------------+---------+
-|function |47     |100.00      |0.00     |
+|function |61     |100.00      |0.00     |
 +---------+-------+------------+---------+
 
 
@@ -23,11 +23,15 @@ External dependencies
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 ::
 
+dotenv (gitlab_stats.dashboard)
 gitlab_stats
+\-config (gitlab_stats.dashboard,gitlab_stats.gitlab_stats_api_ingester)
 \-dashboard_utils
 | \-charts (gitlab_stats.dashboard_utils.sections)
 | \-helpers (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.sections)
+\-gitlab_stats_api_ingester (gitlab_stats.dashboard)
 \-gitlab_stats_parser (gitlab_stats.dashboard)
+\-metrics_schema (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser)
 numpy (gitlab_stats.dashboard_utils.charts)
 pandas (gitlab_stats.dashboard_utils.helpers)
 plotly
@@ -37,7 +41,7 @@ streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_st
 
 
 
-1171 lines have been analyzed
+1628 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -45,13 +49,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |786    |67.12 |
+|code      |1096   |67.32 |
 +----------+-------+------+
-|docstring |190    |16.23 |
+|docstring |242    |14.86 |
 +----------+-------+------+
-|comment   |9      |0.77  |
+|comment   |17     |1.04  |
 +----------+-------+------+
-|empty     |186    |15.88 |
+|empty     |273    |16.77 |
 +----------+-------+------+
 
 

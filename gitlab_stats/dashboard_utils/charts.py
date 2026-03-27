@@ -15,13 +15,24 @@ from gitlab_stats.dashboard_utils.helpers import SECONDARY
 
 def build_pareto_chart(metric_df):
     """Build cumulative contribution Pareto line chart."""
-    cumulative = (
-        metric_df["total_contributions"].cumsum()
-        / metric_df["total_contributions"].sum()
-    )
+    total = metric_df["total_contributions"].sum()
+    if total <= 0:
+        return px.line(
+            x=[0],
+            y=[0],
+            labels={"x": "Projects", "y": "Cumulative Contribution %"},
+            title="Contribution Concentration (Pareto)",
+        )
+
+    cumulative = metric_df["total_contributions"].cumsum() / total
+    x_values = np.arange(1, len(cumulative) + 1)
+    y_values = (100 * cumulative).to_numpy()
+
+    x_with_baseline = np.insert(x_values, 0, 0)
+    y_with_baseline = np.insert(y_values, 0, 0.0)
     return px.line(
-        x=range(len(cumulative)),
-        y=100 * cumulative,
+        x=x_with_baseline,
+        y=y_with_baseline,
         labels={"x": "Projects", "y": "Cumulative Contribution %"},
         title="Contribution Concentration (Pareto)",
     )
