@@ -26,19 +26,22 @@ collaboration metrics, and project contributions.
 
 ## Features
 
-- **Contribution Parsing**: Automatically parse GitLab activity logs to extract contribution data
-- **Visual Dashboard**: Interactive Streamlit-based dashboard with real-time visualizations
-- **Contribution Metrics**: Track commits, merge requests, branches, issues, and collaboration activities
-- **Per-Project Breakdown**: Analyze contributions by individual projects
-- **Code vs Collaboration Split**: Visualize the balance between direct code contributions and collaborative activities
-- **Placeholder Data**: Built-in fallback with sample data for development and testing
-- **Pre-commit Integration**: Automated code quality checks and formatting
+- **API-First Ingestion**: Pulls contribution data directly from GitLab API (`/users/:id/events`)
+- **Parser Fallback**: Falls back to local text parsing when API data is unavailable
+- **Behavior Analytics (API-Only)**: Timeline, streak, momentum, weekly mix, and monthly volumes
+- **Interactive Dashboard**: Streamlit + Plotly visualizations for totals, breakdowns, and project deep dives
+- **Contribution Metrics**: Commits, branches, merge requests, approvals, comments, issues, and derived totals
+- **Smart Caching**: Dashboard data load is cached to prevent expensive refetches on widget interactions
+- **Cache Refresh Control**: Manual refresh button shown under source-load status to force fresh data
+- **Pre-commit Integration**: Automated quality checks (formatting, linting, tests)
 
 ## Description
 
-GitLab Stats is a Python package that transforms raw GitLab contribution logs into actionable insights. It provides:
+GitLab Stats is a Python package that transforms GitLab activity data into actionable insights. It provides:
 
-1. **Data Parsing**: Extracts project names, action types, and contribution counts from GitLab activity files
+1. **Data Ingestion**:
+   - API-first ingestion from GitLab events endpoint
+   - File-parser fallback for resilience and local workflows
 2. **Metrics Calculation**: Computes comprehensive statistics including:
    - Total contributions per project
    - Code contributions (commits, branches)
@@ -49,33 +52,44 @@ GitLab Stats is a Python package that transforms raw GitLab contribution logs in
    - Per-project breakdown tables
    - Contribution charts and comparisons
    - Deep-dive project analysis
+4. **Behavior Analysis**:
+   - API timeline charts and business-day streaks (optionally excluding holidays)
+   - Explicit "unavailable" messaging when timeline data cannot be trusted
 
 ## Architecture
 
 ```mermaid
 graph TB
+   A[GitLab API /users/:id/events]
    B[gitlab_contributions.txt]
    C[doc/gitlab_contributions_placeholder.txt]
    D[dashboard.py]
-   E[gitlab_stats_parser.py]
-   F[helpers.py: prepare_metric_df]
-   G[sections.py]
-   H[charts.py]
-   I[Streamlit Dashboard]
+   E[Streamlit cache_data]
+   F[gitlab_stats_api_ingester.py]
+   G[gitlab_stats_parser.py]
+   H[helpers.py: prepare_metric_df]
+   I[sections.py]
+   J[charts.py]
+   K[Streamlit Dashboard]
 
-   B -->|Primary source| D
-   C -.->|Fallback if primary missing| D
-   D -->|Parse log| E
-   E -->|metrics + totals| F
-   F -->|DataFrame + ordered columns| G
-   G -->|Build visual objects| H
-   G -->|Render| I
-   H -->|Plotly figures| I
+   A -->|Primary source| F
+   B -->|Parser source| G
+   C -.->|Fallback if local file missing| G
+   D --> E
+   E -->|API path| F
+   E -->|Fallback path| G
+   F -->|metrics + totals + timeline| H
+   G -->|metrics + totals| H
+   H -->|DataFrame + ordered columns| I
+   I -->|Build visual objects| J
+   I -->|Render| K
+   J -->|Plotly figures| K
 
    subgraph "Input Layer"
+      A
       B
       C
-    end
+   end
 
    subgraph "Application Layer"
       D
@@ -83,28 +97,37 @@ graph TB
       F
       G
       H
-    end
+      I
+      J
+   end
 
    subgraph "Presentation"
-      I
-    end
+      K
+   end
 ```
 
 **Key Components:**
 
-- **gitlab_stats_parser.py**: Core parsing and metrics engine
+- **gitlab_stats/gitlab_stats_api_ingester.py**: API ingestion and event normalization
+  - Authenticated user resolution and event pagination
+  - Event-to-metric mapping with guardrails for merge/history push inflation
+  - Timeline dataset construction for behavior analysis
+- **gitlab_stats/gitlab_stats_parser.py**: File parser fallback metrics engine
   - Regex-based log parsing
   - Contribution classification
   - Aggregation and computation
-- **dashboard.py**: Streamlit entrypoint and source selection
+- **gitlab_stats/dashboard.py**: Streamlit entrypoint and source orchestration
   - Streamlit page setup
-  - Input path capture
-  - Placeholder fallback handling
+  - API-first with parser fallback selection
+  - Cached data-loading path for fast widget interactions
   - Section orchestration
 - **gitlab_stats/dashboard_utils/helpers.py**: Constants, CSS injection, DataFrame preparation
 - **gitlab_stats/dashboard_utils/sections.py**: Dashboard section rendering
 - **gitlab_stats/dashboard_utils/charts.py**: Plotly figure builders
-- **doc/gitlab_contributions_placeholder.txt**: Demo dataset fallback
+- **gitlab_stats/dashboard_utils/timeline_utils.py**: Timeline aggregation helpers
+- **gitlab_stats/dashboard_utils/activity_rules.py**: Shared rules for commit-count normalization
+- **gitlab_stats/dashboard_utils/metrics_schema.py**: Shared metric-key schema constants
+- **doc/gitlab_contributions_placeholder.txt**: Demo dataset fallback for local parser mode
 
 ## Installation
 
@@ -176,8 +199,26 @@ poetry run streamlit run gitlab_stats/dashboard.py
 
 The dashboard launches at `http://localhost:8501` by default (or the next available port).
 
-Current implementation uses file-based ingestion (`gitlab_contributions.txt`) with a local
-placeholder fallback. GitLab API integration is planned as the next iteration.
+### API Configuration (.env)
+
+Set the following environment variables in your `.env` file:
+
+```bash
+GITLAB_API_BASE_URL=https://your.gitlab.instance/api/v4
+GITLAB_API_TOKEN=your_personal_access_token
+```
+
+If API credentials are missing or API fetch fails, the dashboard can fall back to parser mode.
+
+### Data Source and Behavior Notes
+
+- API is the default primary source (`USE_API = True` in config).
+- Parser is fallback-only for metrics.
+- Behavior analysis is API-only and will not be synthesized from parser data.
+- Behavior charts trim leading inactive days for readability, but KPI windows still use real timeline data.
+- Business-day streaks exclude weekends and the current day; holidays can be excluded via config.
+- Data loading is cached via Streamlit (`DATA_CACHE_TTL_SECONDS`) to avoid full refetch on simple widget interactions.
+- Manual cache refresh is available under the source-load banner ("Metrics loaded from ...").
 
 ### Data Format
 
@@ -211,14 +252,26 @@ Supported actions:
 
 ### Placeholder Data
 
-If the actual contribution file is not found, the dashboard automatically falls back to placeholder data
-A warning banner will display indicating that you're viewing sample data.
+If parser mode is used and the actual contribution file is not found, the dashboard falls back to placeholder data.
+A warning banner displays when sample data is shown.
 
 The default file path is: `gitlab_contributions.txt`
 
 The fallback placeholder path is: `doc/gitlab_contributions_placeholder.txt`
 
 To use a custom file path, enter it in the text input field in the dashboard.
+
+## Key Configuration
+
+Primary runtime toggles in `gitlab_stats/config.py`:
+
+- `USE_API`: Enables API-first ingestion (with parser fallback)
+- `SHOW_DATA_SOURCE_INFO`: Shows/hides source timing/info banners
+- `API_LOOKBACK_DAYS`: Time window for API event ingestion
+- `API_EVENTS_PER_PAGE`: GitLab events page size (max 100)
+- `API_MAX_EVENT_PAGES`: Max number of paginated API pages to fetch
+- `DATA_CACHE_TTL_SECONDS`: Cache time-to-live for expensive data loads
+- `STREAK_HOLIDAY_COUNTRY`: ISO country code for holiday-aware streak calculations
 
 ## Project Structure
 
@@ -235,13 +288,18 @@ gitlab_stats/
 ├── gitlab_contributions.txt   # Real activity export file used as primary local input
 ├── gitlab_stats/           # Main package
 │   ├── __init__.py
+│   ├── config.py           # Runtime feature flags and ingestion settings
 │   ├── dashboard.py        # Streamlit dashboard UI
-│   ├── gitlab_stats_parser.py     # Core parsing and metrics engine
+│   ├── gitlab_stats_api_ingester.py  # API ingestion and mapping engine
+│   ├── gitlab_stats_parser.py     # Parser fallback metrics engine
 │   └── dashboard_utils/
 │       ├── __init__.py
+│       ├── activity_rules.py   # Commit/history push normalization rules
 │       ├── charts.py       # Plotly figure builders
 │       ├── helpers.py      # Shared constants/data helpers/style injection
-│       └── sections.py     # Dashboard section renderers
+│       ├── metrics_schema.py   # Shared metric keys
+│       ├── sections.py     # Dashboard section renderers
+│       └── timeline_utils.py   # Timeline aggregation helpers
 ├── test/                   # Test suite
 │   ├── __init__.py
 │   └── test_gitlab_stats.py
