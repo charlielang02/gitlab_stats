@@ -33,6 +33,16 @@ PLACEHOLDER_FILE_PATH = "doc/gitlab_contributions_placeholder.txt"
 CACHE_TTL_SECONDS = int(getattr(config, "DATA_CACHE_TTL_SECONDS", 1800))
 
 
+def _normalize_metrics_for_cache(metrics, total_metrics):
+    """Convert mapping outputs to plain dicts for cache serialization."""
+    normalized_metrics = {
+        str(project): {str(key): value for key, value in dict(data).items()}
+        for project, data in dict(metrics).items()
+    }
+    normalized_totals = {str(key): value for key, value in dict(total_metrics).items()}
+    return normalized_metrics, normalized_totals
+
+
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL_SECONDS)
 def _load_metrics_cached(
     request: dict[str, object],
@@ -48,19 +58,27 @@ def _load_metrics_cached(
         if result is not None:
             metrics, total_metrics, timeline_df, timeline_meta = result
             timeline_meta["source"] = "api"
-            return metrics, total_metrics, timeline_df, timeline_meta
+            normalized_metrics, normalized_totals = _normalize_metrics_for_cache(
+                metrics,
+                total_metrics,
+            )
+            return normalized_metrics, normalized_totals, timeline_df, timeline_meta
 
     if not selected_path:
         return None
 
     metrics, total_metrics = _parse_gitlab_log(selected_path)
+    normalized_metrics, normalized_totals = _normalize_metrics_for_cache(
+        metrics,
+        total_metrics,
+    )
     timeline_meta = {
         "source": "parser",
         "has_real_dates": False,
         "using_synthetic_timeline": False,
     }
     timeline_df = None
-    return metrics, total_metrics, timeline_df, timeline_meta
+    return normalized_metrics, normalized_totals, timeline_df, timeline_meta
 
 
 def configure_page():
