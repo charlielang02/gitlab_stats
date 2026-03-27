@@ -1,6 +1,7 @@
 """Generate a Streamlit dashboard to visualize GitLab contributions metrics."""
 
 from pathlib import Path
+from time import perf_counter
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -74,16 +75,26 @@ def get_metrics():
         Tuple of (metrics, total_metrics) dicts compatible with dashboard rendering.
     """
     if config.USE_API:
-        result = fetch_metrics_from_api()
+        api_start = perf_counter()
+        with st.spinner("Fetching metrics from GitLab API..."):
+            result = fetch_metrics_from_api()
+        api_elapsed = perf_counter() - api_start
+
         if result is not None:
             if config.SHOW_DATA_SOURCE_INFO:
-                st.info("📊 Metrics loaded from GitLab API")
+                st.info(f"📊 Metrics loaded from GitLab API in {api_elapsed:.2f}s")
             return result
 
+        st.warning("API data unavailable. Falling back to local parser data.")
+
     selected_path = select_data_source()
-    metrics, total_metrics = _parse_gitlab_log(str(Path(selected_path)))
+    parser_start = perf_counter()
+    with st.spinner("Parsing local contributions file..."):
+        metrics, total_metrics = _parse_gitlab_log(str(Path(selected_path)))
+    parser_elapsed = perf_counter() - parser_start
+
     if config.SHOW_DATA_SOURCE_INFO:
-        st.info("📄 Metrics loaded from local file parser")
+        st.info(f"📄 Metrics loaded from local file parser in {parser_elapsed:.2f}s")
     return metrics, total_metrics
 
 

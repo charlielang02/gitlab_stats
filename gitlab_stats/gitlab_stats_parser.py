@@ -4,13 +4,17 @@ prints a summary of contributions per project and total contributions."""
 import re
 from collections import defaultdict
 
+from gitlab_stats.activity_rules import HISTORY_PUSH_THRESHOLD
+from gitlab_stats.activity_rules import INTEGRATION_BRANCH_RE
+from gitlab_stats.activity_rules import MERGE_COMMIT_TITLE_RE
 from gitlab_stats.metrics_schema import BASE_METRIC_KEYS
 from gitlab_stats.metrics_schema import PERCENTAGE_METRIC_KEYS
 from gitlab_stats.metrics_schema import TOTAL_COUNT_METRIC_KEYS
 
 # --- Regex patterns ---
 PROJECT_RE = re.compile(r"at (.+)")
-MORE_COMMITS_RE = re.compile(r"\.\.\. and (\d+) more commits")
+BRANCH_RE = re.compile(r"pushed to branch\s+([^\s]+)")
+MORE_COMMITS_RE = re.compile(r"\.\.\. and (\d+) more commits?")
 
 ACTION_PATTERNS = {
     "commit_event": re.compile(r"pushed to branch"),
@@ -40,12 +44,33 @@ def _classify_action(line):
     return None
 
 
-def count_commits(lines, start_index):
+def _extract_branch(line):
+    match = BRANCH_RE.search(line)
+    return match.group(1).strip() if match else None
+
+
+def _is_merge_push(lines, start_index):
+    """Return True when the push's primary commit title is a merge commit."""
+    for i in range(start_index + 1, min(start_index + 6, len(lines))):
+        candidate = lines[i].strip()
+        if "\u00b7" in candidate:
+            commit_title = candidate.split("\u00b7", maxsplit=1)[1].strip()
+            return bool(MERGE_COMMIT_TITLE_RE.search(commit_title))
+    return False
+
+
+def count_commits(lines, start_index, branch_name=None):
     """
     Count commits for a push event.
     Looks ahead a few lines for '... and X more commits'
     """
     base_commits = 1
+
+    # Merge commits should count as a single commit even when UI text says
+    # "... and X more commits" for included branch history.
+    if _is_merge_push(lines, start_index):
+        return base_commits
+
     extra_commits = 0
 
     for i in range(start_index, min(start_index + 5, len(lines))):
@@ -54,7 +79,18 @@ def count_commits(lines, start_index):
             extra_commits = int(match.group(1))
             break
 
-    return base_commits + extra_commits
+    total_commits = base_commits + extra_commits
+
+    # Large push counts on integration branches are commonly branch-history
+    # sync events and should be treated as one contribution.
+    if (
+        total_commits >= HISTORY_PUSH_THRESHOLD
+        and branch_name
+        and INTEGRATION_BRANCH_RE.search(branch_name)
+    ):
+        return 1
+
+    return total_commits
 
 
 # --- Contribution calculations ---
@@ -99,7 +135,7 @@ def _parse_gitlab_log(file_path):
             continue
 
         if action == "commit_event":
-            commit_count = count_commits(lines, i)
+            commit_count = count_commits(lines, i, _extract_branch(line))
             metrics[project]["commits"] += commit_count
         else:
             metrics[project][action] += 1

@@ -25,6 +25,9 @@ from urllib.request import Request
 from urllib.request import urlopen
 
 from gitlab_stats import config
+from gitlab_stats.activity_rules import HISTORY_PUSH_THRESHOLD
+from gitlab_stats.activity_rules import INTEGRATION_BRANCH_RE
+from gitlab_stats.activity_rules import MERGE_COMMIT_TITLE_RE
 from gitlab_stats.metrics_schema import BASE_METRIC_KEYS
 from gitlab_stats.metrics_schema import TOTAL_COUNT_METRIC_KEYS
 
@@ -188,10 +191,23 @@ def _map_event_to_project_metrics(
     push_data = event.get("push_data") or {}
     ref_type = str(push_data.get("ref_type", "")).lower()
     push_action = str(push_data.get("action", "")).lower()
+    branch_ref = str(push_data.get("ref", "")).strip()
     updated = False
 
     if action.startswith("pushed"):
         commit_count = _to_int(push_data.get("commit_count", 0))
+        commit_title = str(push_data.get("commit_title", "")).strip()
+
+        if commit_count > 0 and MERGE_COMMIT_TITLE_RE.search(commit_title):
+            commit_count = 1
+
+        # Large push counts on integration branches are commonly branch-history
+        # sync events and should be treated as one contribution.
+        if commit_count >= HISTORY_PUSH_THRESHOLD and INTEGRATION_BRANCH_RE.search(
+            branch_ref,
+        ):
+            commit_count = 1
+
         project_data["commits"] += commit_count
         updated = updated or commit_count > 0
 

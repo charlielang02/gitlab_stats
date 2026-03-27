@@ -1,6 +1,6 @@
 Report
 ======
-685 statements analysed.
+742 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -8,13 +8,13 @@ Statistics by type
 +---------+-------+-----------+-----------+------------+---------+
 |type     |number |%documented |%badname |
 +=========+=======+============+=========+
-|module   |10     |100.00      |0.00     |
+|module   |11     |100.00      |0.00     |
 +---------+-------+------------+---------+
 |class    |0      |0           |0        |
 +---------+-------+------------+---------+
 |method   |0      |0           |0        |
 +---------+-------+------------+---------+
-|function |61     |100.00      |0.00     |
+|function |63     |100.00      |0.00     |
 +---------+-------+------------+---------+
 
 
@@ -25,6 +25,7 @@ External dependencies
 
 dotenv (gitlab_stats.dashboard)
 gitlab_stats
+\-activity_rules (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser)
 \-config (gitlab_stats.dashboard,gitlab_stats.gitlab_stats_api_ingester)
 \-dashboard_utils
 | \-charts (gitlab_stats.dashboard_utils.sections)
@@ -41,7 +42,7 @@ streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_st
 
 
 
-1628 lines have been analyzed
+1725 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -49,13 +50,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |1096   |67.32 |
+|code      |1159   |67.19 |
 +----------+-------+------+
-|docstring |242    |14.86 |
+|docstring |244    |14.14 |
 +----------+-------+------+
-|comment   |17     |1.04  |
+|comment   |25     |1.45  |
 +----------+-------+------+
-|empty     |273    |16.77 |
+|empty     |297    |17.22 |
 +----------+-------+------+
 
 
