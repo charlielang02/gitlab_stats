@@ -25,6 +25,11 @@ from urllib.parse import urlparse
 from urllib.request import Request
 from urllib.request import urlopen
 
+try:
+    import streamlit as st
+except ImportError:  # pragma: no cover - optional runtime dependency
+    st = None
+
 from gitlab_stats import config
 from gitlab_stats.dashboard_utils.activity_rules import HISTORY_PUSH_THRESHOLD
 from gitlab_stats.dashboard_utils.activity_rules import INTEGRATION_BRANCH_RE
@@ -48,6 +53,23 @@ def _to_int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _read_setting(name: str) -> str:
+    """Read config from env first, then Streamlit Secrets when available."""
+    env_value = os.getenv(name)
+    if env_value:
+        return env_value
+
+    if st is None:
+        return ""
+
+    try:
+        secret_value = st.secrets.get(name)
+    except (AttributeError, RuntimeError, KeyError, TypeError):
+        return ""
+
+    return str(secret_value).strip() if secret_value else ""
 
 
 def _request_json(url: str, token: str) -> list[dict[str, Any]] | dict[str, Any]:
@@ -398,8 +420,8 @@ def fetch_metrics_from_api_with_time(
     ) = None
 
     try:
-        api_token = os.getenv("GITLAB_API_TOKEN")
-        api_base_url = os.getenv("GITLAB_API_BASE_URL")
+        api_token = _read_setting("GITLAB_API_TOKEN")
+        api_base_url = _read_setting("GITLAB_API_BASE_URL")
         if not api_token or not api_base_url:
             logger.warning(
                 "API credentials not configured. Set GITLAB_API_TOKEN and "
