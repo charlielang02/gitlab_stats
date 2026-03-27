@@ -17,4 +17,8 @@ API_LOOKBACK_DAYS = 365
 
 # Pagination controls for /users/:id/events.
 API_EVENTS_PER_PAGE = 100
-API_MAX_EVENT_PAGES = 50
+API_MAX_EVENT_PAGES = 200
+
+# Optional holiday filtering for streak calculations (ISO country code, e.g. "US").
+# Leave empty to use weekday-only streak calculations.
+STREAK_HOLIDAY_COUNTRY = "CA"

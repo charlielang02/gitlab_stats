@@ -1,6 +1,6 @@
 Report
 ======
-742 statements analysed.
+971 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -8,13 +8,13 @@ Statistics by type
 +---------+-------+-----------+-----------+------------+---------+
 |type     |number |%documented |%badname |
 +=========+=======+============+=========+
-|module   |11     |100.00      |0.00     |
+|module   |12     |100.00      |0.00     |
 +---------+-------+------------+---------+
 |class    |0      |0           |0        |
 +---------+-------+------------+---------+
 |method   |0      |0           |0        |
 +---------+-------+------------+---------+
-|function |63     |100.00      |0.00     |
+|function |80     |100.00      |0.00     |
 +---------+-------+------------+---------+
 
 
@@ -26,15 +26,16 @@ External dependencies
 dotenv (gitlab_stats.dashboard)
 gitlab_stats
 \-activity_rules (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser)
-\-config (gitlab_stats.dashboard,gitlab_stats.gitlab_stats_api_ingester)
+\-config (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.sections,gitlab_stats.gitlab_stats_api_ingester)
 \-dashboard_utils
 | \-charts (gitlab_stats.dashboard_utils.sections)
 | \-helpers (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.sections)
 \-gitlab_stats_api_ingester (gitlab_stats.dashboard)
 \-gitlab_stats_parser (gitlab_stats.dashboard)
-\-metrics_schema (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser)
+\-metrics_schema (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser,gitlab_stats.timeline_utils)
+\-timeline_utils (gitlab_stats.gitlab_stats_api_ingester)
 numpy (gitlab_stats.dashboard_utils.charts)
-pandas (gitlab_stats.dashboard_utils.helpers)
+pandas (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.timeline_utils)
 plotly
 \-express (gitlab_stats.dashboard_utils.charts)
 \-graph_objects (gitlab_stats.dashboard_utils.charts)
@@ -42,7 +43,7 @@ streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_st
 
 
 
-1725 lines have been analyzed
+2199 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -50,13 +51,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |1159   |67.19 |
+|code      |1511   |68.71 |
 +----------+-------+------+
-|docstring |244    |14.14 |
+|docstring |284    |12.91 |
 +----------+-------+------+
-|comment   |25     |1.45  |
+|comment   |23     |1.05  |
 +----------+-------+------+
-|empty     |297    |17.22 |
+|empty     |381    |17.33 |
 +----------+-------+------+
 
 

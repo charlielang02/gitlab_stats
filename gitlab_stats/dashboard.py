@@ -11,6 +11,7 @@ from gitlab_stats.dashboard_utils.helpers import inject_dashboard_styles
 from gitlab_stats.dashboard_utils.helpers import prepare_metric_df
 from gitlab_stats.dashboard_utils.helpers import render_main_header
 from gitlab_stats.dashboard_utils.helpers import resolve_selected_path
+from gitlab_stats.dashboard_utils.sections import render_behavior_analysis
 from gitlab_stats.dashboard_utils.sections import render_breakdown_tabs
 from gitlab_stats.dashboard_utils.sections import render_contribution_distribution
 from gitlab_stats.dashboard_utils.sections import render_executive_summary
@@ -20,7 +21,7 @@ from gitlab_stats.dashboard_utils.sections import render_performance_tabs
 from gitlab_stats.dashboard_utils.sections import render_profile
 from gitlab_stats.dashboard_utils.sections import render_project_deep_dive
 from gitlab_stats.dashboard_utils.sections import render_top_projects
-from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_api
+from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_api_with_time
 from gitlab_stats.gitlab_stats_parser import _parse_gitlab_log
 
 # Load environment variables from .env file if it exists
@@ -72,18 +73,20 @@ def get_metrics():
     """Fetch metrics from configured source (API with fallback to parser).
 
     Returns:
-        Tuple of (metrics, total_metrics) dicts compatible with dashboard rendering.
+        Tuple of metrics, totals, timeline dataframe, and timeline metadata.
     """
     if config.USE_API:
         api_start = perf_counter()
         with st.spinner("Fetching metrics from GitLab API..."):
-            result = fetch_metrics_from_api()
+            result = fetch_metrics_from_api_with_time()
         api_elapsed = perf_counter() - api_start
 
         if result is not None:
+            metrics, total_metrics, timeline_df, timeline_meta = result
+            timeline_meta["source"] = "api"
             if config.SHOW_DATA_SOURCE_INFO:
                 st.info(f"📊 Metrics loaded from GitLab API in {api_elapsed:.2f}s")
-            return result
+            return metrics, total_metrics, timeline_df, timeline_meta
 
         st.warning("API data unavailable. Falling back to local parser data.")
 
@@ -95,18 +98,25 @@ def get_metrics():
 
     if config.SHOW_DATA_SOURCE_INFO:
         st.info(f"📄 Metrics loaded from local file parser in {parser_elapsed:.2f}s")
-    return metrics, total_metrics
+    timeline_meta = {
+        "source": "parser",
+        "has_real_dates": False,
+        "using_synthetic_timeline": False,
+    }
+    timeline_df = None
+    return metrics, total_metrics, timeline_df, timeline_meta
 
 
 def main():
     """Run the dashboard app."""
     configure_page()
 
-    metrics, total_metrics = get_metrics()
+    metrics, total_metrics, timeline_df, timeline_meta = get_metrics()
     metric_df, ordered_columns = prepare_metric_df(metrics)
 
     render_executive_summary(metric_df, total_metrics)
     render_profile(metric_df, total_metrics)
+    render_behavior_analysis(timeline_df, timeline_meta)
     render_key_insights(metric_df, total_metrics)
     render_contribution_distribution(metric_df)
     render_breakdown_tabs(metric_df, total_metrics)

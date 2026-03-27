@@ -14,6 +14,7 @@ import logging
 import os
 from collections import defaultdict
 from datetime import UTC
+from datetime import date
 from datetime import datetime
 from datetime import timedelta
 from typing import Any
@@ -30,12 +31,16 @@ from gitlab_stats.activity_rules import INTEGRATION_BRANCH_RE
 from gitlab_stats.activity_rules import MERGE_COMMIT_TITLE_RE
 from gitlab_stats.metrics_schema import BASE_METRIC_KEYS
 from gitlab_stats.metrics_schema import TOTAL_COUNT_METRIC_KEYS
+from gitlab_stats.timeline_utils import build_timeline
 
 logger = logging.getLogger(__name__)
 
 
-def _iso_date(days_ago: int) -> str:
-    return (datetime.now(tz=UTC) - timedelta(days=days_ago)).date().isoformat()
+def _api_window() -> tuple[date, date]:
+    lookback_days = max(1, _to_int(config.API_LOOKBACK_DAYS))
+    period_end = datetime.now(tz=UTC).date()
+    period_start = period_end - timedelta(days=lookback_days - 1)
+    return period_start, period_end
 
 
 def _to_int(value: Any) -> int:
@@ -60,6 +65,25 @@ def _request_json(url: str, token: str) -> list[dict[str, Any]] | dict[str, Any]
         return json.loads(payload)
 
 
+def _request_json_with_headers(
+    url: str,
+    token: str,
+) -> tuple[list[dict[str, Any]] | dict[str, Any], dict[str, str]]:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        msg = f"Unsupported URL scheme for GitLab API request: {parsed.scheme}"
+        raise ValueError(msg)
+
+    request = Request(url)  # noqa: S310
+    request.add_header("PRIVATE-TOKEN", token)
+    request.add_header("Accept", "application/json")
+
+    with urlopen(request, timeout=30) as response:  # noqa: S310
+        payload = response.read().decode("utf-8")
+        headers = {str(k): str(v) for k, v in response.headers.items()}
+        return json.loads(payload), headers
+
+
 def _fetch_authenticated_user(base_url: str, token: str) -> dict[str, Any]:
     payload = _request_json(f"{base_url.rstrip('/')}/user", token)
     if not isinstance(payload, dict):
@@ -80,17 +104,19 @@ def _fetch_events(
     per_page = max(1, min(config.API_EVENTS_PER_PAGE, 100))
     max_pages = max(1, config.API_MAX_EVENT_PAGES)
 
-    for page in range(1, max_pages + 1):
-        query = urlencode(
-            {
-                "after": after_date,
-                "before": before_date,
-                "page": page,
-                "per_page": per_page,
-            },
+    page = 1
+    hit_pagination_limit = False
+    while page <= max_pages:
+        url = (
+            f"{base_url.rstrip('/')}/users/{user_id}/events?"
+            f"{urlencode({
+                'after': after_date,
+                'before': before_date,
+                'page': page,
+                'per_page': per_page,
+            })}"
         )
-        url = f"{base_url.rstrip('/')}/users/{user_id}/events?{query}"
-        payload = _request_json(url, token)
+        payload, headers = _request_json_with_headers(url, token)
 
         if not isinstance(payload, list):
             msg = "Expected JSON list from /users/:id/events endpoint"
@@ -100,8 +126,29 @@ def _fetch_events(
             break
 
         events.extend(payload)
+
+        next_page_raw = (headers.get("X-Next-Page") or "").strip()
+        if next_page_raw:
+            if page == max_pages:
+                hit_pagination_limit = True
+            page = _to_int(next_page_raw)
+            if page <= 0:
+                break
+            continue
+
         if len(payload) < per_page:
             break
+
+        if page == max_pages:
+            hit_pagination_limit = True
+        page += 1
+
+    if hit_pagination_limit:
+        logger.warning(
+            "Reached API_MAX_EVENT_PAGES=%s while fetching events; older data may "
+            "be truncated. Increase API_MAX_EVENT_PAGES to cover the full window.",
+            max_pages,
+        )
 
     return events
 
@@ -182,19 +229,31 @@ def _event_project_name(
     return None
 
 
-def _map_event_to_project_metrics(
-    project_data: dict[str, Any],
-    event: dict[str, Any],
-) -> bool:
+def _event_date_from_api_event(event: dict[str, Any]):
+    created_at = event.get("created_at")
+    if not created_at:
+        return None
+
+    created_at_dt = datetime.fromisoformat(str(created_at))
+    return created_at_dt.date()
+
+
+def _event_counts_from_event(event: dict[str, Any]) -> dict[str, int]:
+    """Map one API event to base metric counts."""
     action = str(event.get("action_name", "")).strip().lower()
     target = str(event.get("target_type", "")).strip().lower()
     push_data = event.get("push_data") or {}
     ref_type = str(push_data.get("ref_type", "")).lower()
     push_action = str(push_data.get("action", "")).lower()
     branch_ref = str(push_data.get("ref", "")).strip()
-    updated = False
+    counts = dict.fromkeys(BASE_METRIC_KEYS, 0)
+    is_branch_creation_push = action.startswith("pushed new") or (
+        action.startswith("pushed")
+        and ref_type == "branch"
+        and push_action == "created"
+    )
 
-    if action.startswith("pushed"):
+    if action.startswith("pushed") and not is_branch_creation_push:
         commit_count = _to_int(push_data.get("commit_count", 0))
         commit_title = str(push_data.get("commit_title", "")).strip()
 
@@ -208,42 +267,41 @@ def _map_event_to_project_metrics(
         ):
             commit_count = 1
 
-        project_data["commits"] += commit_count
-        updated = updated or commit_count > 0
+        counts["commits"] += commit_count
 
-    if action.startswith("pushed new") or (
-        action.startswith("pushed")
-        and ref_type == "branch"
-        and push_action == "created"
-    ):
-        project_data["branch_created"] += 1
-        updated = True
+    if is_branch_creation_push:
+        counts["branch_created"] += 1
 
     if action == "deleted" and (ref_type == "branch" or push_action == "deleted"):
-        project_data["branch_deleted"] += 1
-        updated = True
+        counts["branch_deleted"] += 1
 
     if action == "opened" and target == "mergerequest":
-        project_data["mr_opened"] += 1
-        updated = True
+        counts["mr_opened"] += 1
 
     if action == "accepted" and target == "mergerequest":
-        project_data["mr_merged"] += 1
-        updated = True
+        counts["mr_merged"] += 1
 
     if action == "approved" and target == "mergerequest":
-        project_data["mr_approved"] += 1
-        updated = True
+        counts["mr_approved"] += 1
 
     if action == "commented on" and target in {"diffnote", "discussionnote", "note"}:
-        project_data["mr_commented"] += 1
-        updated = True
+        counts["mr_commented"] += 1
 
     if action == "opened" and target in {"issue", "workitem"}:
-        project_data["issue_opened"] += 1
-        updated = True
+        counts["issue_opened"] += 1
 
-    return updated
+    return counts
+
+
+def _map_event_to_project_metrics(
+    project_data: dict[str, Any],
+    event: dict[str, Any],
+) -> bool:
+    """Backward-compatible helper for tests and quick diagnostics."""
+    event_counts = _event_counts_from_event(event)
+    for metric_key, count in event_counts.items():
+        project_data[metric_key] += count
+    return any(count > 0 for count in event_counts.values())
 
 
 def _aggregate_totals(metrics: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -288,9 +346,11 @@ def _build_non_zero_metrics(
     events: list[dict[str, Any]],
     api_base_url: str,
     api_token: str,
-) -> dict[str, dict[str, Any]]:
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]], bool]:
     metrics: dict[str, dict[str, Any]] = defaultdict(lambda: defaultdict(int))
     project_name_cache: dict[int, str | None] = {}
+    event_records: list[dict[str, Any]] = []
+    has_real_dates = False
 
     for event in events:
         project_name = _event_project_name(
@@ -303,7 +363,22 @@ def _build_non_zero_metrics(
             continue
 
         project_data = metrics[project_name]
-        _map_event_to_project_metrics(project_data, event)
+        event_counts = _event_counts_from_event(event)
+        for metric_key, count in event_counts.items():
+            project_data[metric_key] += count
+
+        event_date = _event_date_from_api_event(event)
+        has_real_dates = has_real_dates or event_date is not None
+        for metric_key, count in event_counts.items():
+            if count > 0:
+                event_records.append(
+                    {
+                        "event_date": event_date,
+                        "project": project_name,
+                        "event_type": metric_key,
+                        "count": count,
+                    },
+                )
 
     non_zero_metrics: dict[str, dict[str, Any]] = {}
     for project_name, project_data in metrics.items():
@@ -311,7 +386,78 @@ def _build_non_zero_metrics(
         if _to_int(project_data.get("total_contributions", 0)) > 0:
             non_zero_metrics[project_name] = project_data
 
-    return non_zero_metrics
+    return non_zero_metrics, event_records, has_real_dates
+
+
+def fetch_metrics_from_api_with_time(
+    user_id: int | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], Any, dict[str, bool | int | str]] | None:
+    """Fetch API metrics plus timeline dataframe and timeline metadata."""
+    result: (
+        tuple[dict[str, Any], dict[str, Any], Any, dict[str, bool | int | str]] | None
+    ) = None
+
+    try:
+        api_token = os.getenv("GITLAB_API_TOKEN")
+        api_base_url = os.getenv("GITLAB_API_BASE_URL")
+        if not api_token or not api_base_url:
+            logger.warning(
+                "API credentials not configured. Set GITLAB_API_TOKEN and "
+                "GITLAB_API_BASE_URL in .env file to enable API ingestion.",
+            )
+            return None
+
+        resolved_user_id = _resolve_user_id(user_id, api_base_url, api_token)
+        if resolved_user_id is None:
+            logger.error("Unable to resolve authenticated GitLab user id")
+            return None
+
+        period_start, period_end = _api_window()
+
+        events = _fetch_events(
+            base_url=api_base_url,
+            token=api_token,
+            user_id=resolved_user_id,
+            after_date=period_start.isoformat(),
+            before_date=period_end.isoformat(),
+        )
+        if not events:
+            logger.warning("No events returned from GitLab API; using parser fallback")
+            return None
+
+        non_zero_metrics, event_records, has_real_dates = _build_non_zero_metrics(
+            events,
+            api_base_url,
+            api_token,
+        )
+        if not non_zero_metrics:
+            logger.warning("No project-scoped metrics could be derived from API events")
+            return None
+
+        total_metrics = _aggregate_totals(non_zero_metrics)
+        normalized_metrics = {
+            project: dict(data) for project, data in non_zero_metrics.items()
+        }
+        timeline_df, timeline_meta = build_timeline(
+            event_records,
+            has_real_dates,
+            period_start=period_start,
+            period_end=period_end,
+        )
+
+        logger.info(
+            "Loaded API metrics for %s project(s) across %s event(s)",
+            len(normalized_metrics),
+            len(events),
+        )
+        result = (normalized_metrics, total_metrics, timeline_df, timeline_meta)
+
+    except (HTTPError, URLError):
+        logger.exception("GitLab API connectivity failure")
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError, TimeoutError):
+        logger.exception("Failed to parse GitLab API response")
+
+    return result
 
 
 def fetch_metrics_from_api(
@@ -352,56 +498,9 @@ def fetch_metrics_from_api(
 
     total_metrics: Same structure but aggregated across all projects.
     """
-    result: tuple[dict[str, Any], dict[str, Any]] | None = None
+    result_with_time = fetch_metrics_from_api_with_time(user_id=user_id)
+    if result_with_time is None:
+        return None
 
-    try:
-        api_token = os.getenv("GITLAB_API_TOKEN")
-        api_base_url = os.getenv("GITLAB_API_BASE_URL")
-
-        if not api_token or not api_base_url:
-            logger.warning(
-                "API credentials not configured. Set GITLAB_API_TOKEN and "
-                "GITLAB_API_BASE_URL in .env file to enable API ingestion.",
-            )
-            return None
-
-        resolved_user_id = _resolve_user_id(user_id, api_base_url, api_token)
-        if resolved_user_id is None:
-            logger.error("Unable to resolve authenticated GitLab user id")
-            return None
-
-        events = _fetch_events(
-            base_url=api_base_url,
-            token=api_token,
-            user_id=resolved_user_id,
-            after_date=_iso_date(config.API_LOOKBACK_DAYS),
-            before_date=_iso_date(0),
-        )
-        if not events:
-            logger.warning("No events returned from GitLab API; using parser fallback")
-            return None
-
-        non_zero_metrics = _build_non_zero_metrics(events, api_base_url, api_token)
-        if not non_zero_metrics:
-            logger.warning("No project-scoped metrics could be derived from API events")
-            return None
-
-        total_metrics = _aggregate_totals(non_zero_metrics)
-        normalized_metrics = {
-            project: dict(data) for project, data in non_zero_metrics.items()
-        }
-
-        logger.info(
-            "Loaded API metrics for %s project(s) across %s event(s)",
-            len(normalized_metrics),
-            len(events),
-        )
-        result = (normalized_metrics, total_metrics)
-
-    except (HTTPError, URLError):
-        logger.exception("GitLab API connectivity failure")
-
-    except (ValueError, TypeError, KeyError, json.JSONDecodeError, TimeoutError):
-        logger.exception("Failed to parse GitLab API response")
-
-    return result
+    metrics, total_metrics, _, _ = result_with_time
+    return metrics, total_metrics

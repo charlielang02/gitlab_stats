@@ -114,11 +114,54 @@ def _compute_collab_contributions(data):
     )
 
 
+def _aggregate_metrics(metrics):
+    """Compute derived project and total metrics from base metric counters."""
+    total_metrics = defaultdict(int)
+
+    for data in metrics.values():
+        code_total = _compute_code_contributions(data)
+        collab_total = _compute_collab_contributions(data)
+        total = code_total + collab_total
+
+        data["code_contributions"] = code_total
+        data["collab_contributions"] = collab_total
+        data["total_contributions"] = total
+
+        if total > 0:
+            data["code_pct"] = round(100 * code_total / total, 1)
+            data["collab_pct"] = round(100 * collab_total / total, 1)
+        else:
+            data["code_pct"] = 0.0
+            data["collab_pct"] = 0.0
+
+        for key in TOTAL_COUNT_METRIC_KEYS:
+            total_metrics[key] += data.get(key, 0)
+
+    if total_metrics["total_contributions"] > 0:
+        total_metrics["code_pct"] = round(
+            100
+            * total_metrics["code_contributions"]
+            / total_metrics["total_contributions"],
+            1,
+        )
+        total_metrics["collab_pct"] = round(
+            100
+            * total_metrics["collab_contributions"]
+            / total_metrics["total_contributions"],
+            1,
+        )
+    else:
+        total_metrics["code_pct"] = 0.0
+        total_metrics["collab_pct"] = 0.0
+
+    return metrics, total_metrics
+
+
 def _parse_gitlab_log(file_path):
     metrics = defaultdict(lambda: defaultdict(int))
 
-    with open(file_path, encoding="utf-8") as f:
-        lines = f.readlines()
+    with open(file_path, encoding="utf-8") as file:
+        lines = file.readlines()
 
     i = 0
     while i < len(lines):
@@ -142,49 +185,7 @@ def _parse_gitlab_log(file_path):
 
         i += 1
 
-    # --- Compute totals ---
-    total_metrics = defaultdict(int)
-
-    for data in metrics.values():
-        code_total = _compute_code_contributions(data)
-        collab_total = _compute_collab_contributions(data)
-        total = code_total + collab_total
-
-        data["code_contributions"] = code_total
-        data["collab_contributions"] = collab_total
-        data["total_contributions"] = total
-
-        # --- Percentages ---
-        if total > 0:
-            data["code_pct"] = round(100 * code_total / total, 1)
-            data["collab_pct"] = round(100 * collab_total / total, 1)
-        else:
-            data["code_pct"] = 0.0
-            data["collab_pct"] = 0.0
-
-        # Sum only count-based values across projects.
-        for key in TOTAL_COUNT_METRIC_KEYS:
-            total_metrics[key] += data.get(key, 0)
-
-    # Recompute percentages for the aggregated totals only.
-    if total_metrics["total_contributions"] > 0:
-        total_metrics["code_pct"] = round(
-            100
-            * total_metrics["code_contributions"]
-            / total_metrics["total_contributions"],
-            1,
-        )
-        total_metrics["collab_pct"] = round(
-            100
-            * total_metrics["collab_contributions"]
-            / total_metrics["total_contributions"],
-            1,
-        )
-    else:
-        total_metrics["code_pct"] = 0.0
-        total_metrics["collab_pct"] = 0.0
-
-    return metrics, total_metrics
+    return _aggregate_metrics(metrics)
 
 
 def _print_summary(metrics, total_metrics):

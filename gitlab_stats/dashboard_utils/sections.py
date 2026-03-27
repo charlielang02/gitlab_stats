@@ -1,23 +1,190 @@
 """Section renderers for the Streamlit dashboard."""
 
+from datetime import UTC
+
+import pandas as pd
 import streamlit as st
 
+from gitlab_stats import config
 from gitlab_stats.dashboard_utils.charts import build_activity_heatmap
 from gitlab_stats.dashboard_utils.charts import build_code_collab_pie
 from gitlab_stats.dashboard_utils.charts import build_commit_velocity_chart
 from gitlab_stats.dashboard_utils.charts import build_commits_vs_mrs_scatter
 from gitlab_stats.dashboard_utils.charts import build_comparison_chart
 from gitlab_stats.dashboard_utils.charts import build_contribution_style_chart
+from gitlab_stats.dashboard_utils.charts import build_daily_activity_trend
 from gitlab_stats.dashboard_utils.charts import build_distribution_box
+from gitlab_stats.dashboard_utils.charts import build_monthly_volume_chart
 from gitlab_stats.dashboard_utils.charts import build_mr_activity_chart
 from gitlab_stats.dashboard_utils.charts import build_pareto_chart
 from gitlab_stats.dashboard_utils.charts import build_project_activity_bar
 from gitlab_stats.dashboard_utils.charts import build_project_pie
 from gitlab_stats.dashboard_utils.charts import build_top_projects_chart
 from gitlab_stats.dashboard_utils.charts import build_type_distribution_pie
+from gitlab_stats.dashboard_utils.charts import build_weekly_mix_chart
 from gitlab_stats.dashboard_utils.helpers import SECONDARY
 from gitlab_stats.dashboard_utils.helpers import compute_profile_summary
 from gitlab_stats.dashboard_utils.helpers import format_project_metrics_table
+
+BUSINESS_WEEKDAY_CUTOFF = 5
+
+try:
+    import holidays as pyholidays
+except ImportError:  # pragma: no cover - optional dependency
+    pyholidays = None
+
+
+def _holiday_dates(dates: list[pd.Timestamp], country_code: str) -> set:
+    """Return a set of holiday dates for optional streak filtering."""
+    normalized_code = country_code.strip().upper()
+    if not normalized_code:
+        return set()
+
+    years = sorted({timestamp.year for timestamp in dates})
+    if not years:
+        return set()
+
+    if pyholidays is None:
+        return set()
+
+    try:
+        country_holidays = pyholidays.country_holidays(normalized_code, years=years)
+        return set(country_holidays.keys())
+    except (NotImplementedError, ValueError):
+        return set()
+
+
+def _compute_streaks(activity_series):
+    """Compute current and longest active-day streaks from daily totals."""
+    current_streak = 0
+    longest_streak = 0
+    running = 0
+
+    for is_active in activity_series:
+        if bool(is_active):
+            running += 1
+            longest_streak = max(longest_streak, running)
+        else:
+            running = 0
+
+    for is_active in reversed(list(activity_series)):
+        if bool(is_active):
+            current_streak += 1
+        else:
+            break
+
+    return current_streak, longest_streak
+
+
+def _business_day_activity(timeline: pd.DataFrame) -> pd.Series:
+    """Return active flags for business days only, excluding the current day."""
+    business = timeline.copy()
+    business["event_date"] = pd.to_datetime(business["event_date"])
+    business = business.sort_values("event_date")
+
+    today_utc = pd.Timestamp.now(tz=UTC).date()
+    holiday_set = _holiday_dates(
+        business["event_date"].tolist(),
+        config.STREAK_HOLIDAY_COUNTRY,
+    )
+
+    business["is_weekday"] = business["event_date"].dt.weekday < BUSINESS_WEEKDAY_CUTOFF
+    business["is_today"] = business["event_date"].dt.date == today_utc
+    business["is_holiday"] = business["event_date"].dt.date.isin(holiday_set)
+
+    working_days = business[
+        business["is_weekday"] & ~business["is_today"] & ~business["is_holiday"]
+    ]
+    return working_days["total_contributions"] > 0
+
+
+def _compute_behavior_kpis(timeline):
+    """Compute streak and momentum KPIs from timeline data."""
+    daily_active = timeline["total_contributions"] > 0
+    business_day_active = _business_day_activity(timeline)
+    current_streak, longest_streak = _compute_streaks(business_day_active.tolist())
+    return {
+        "current_streak": current_streak,
+        "longest_streak": longest_streak,
+        "active_days": int(daily_active.sum()),
+        "momentum": int(timeline.tail(28)["total_contributions"].sum())
+        - int(timeline.iloc[-56:-28]["total_contributions"].sum()),
+    }
+
+
+def _render_behavior_metric_cards(kpis):
+    """Render behavior KPI cards."""
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Current Streak", f"{kpis['current_streak']} days")
+    col2.metric("Longest Streak", f"{kpis['longest_streak']} days")
+    col3.metric("Active Days", kpis["active_days"])
+    col4.metric("Momentum (28d)", f"{kpis['momentum']:+d}")
+
+
+def _trim_leading_inactive_days(timeline: pd.DataFrame) -> pd.DataFrame:
+    """Trim leading zero-activity days for behavior charts only."""
+    if timeline.empty:
+        return timeline
+
+    active_rows = timeline["total_contributions"] > 0
+    if not bool(active_rows.any()):
+        return timeline
+
+    first_active_idx = active_rows.idxmax()
+    return timeline.loc[first_active_idx:].reset_index(drop=True)
+
+
+def render_behavior_analysis(timeline_df, timeline_meta):
+    """Render timeline-driven behavior analytics section."""
+    st.markdown("---")
+    st.header("🧭 Behavior Analysis")
+
+    if timeline_df is None or timeline_df.empty:
+        if timeline_meta.get("source") == "parser":
+            st.info(
+                "Behavior analysis is API-only and is not computed from parser fallback.",
+            )
+        elif not timeline_meta.get("has_real_dates", False):
+            st.warning(
+                "Behavior analysis is unavailable because this data source does "
+                "not include usable event timestamps. No synthetic data is shown.",
+            )
+        else:
+            st.info("No activity was found in the selected lookback period.")
+        return
+
+    timeline = timeline_df.copy()
+    timeline["event_date"] = pd.to_datetime(timeline["event_date"])
+    timeline = timeline.sort_values("event_date")
+
+    if int((timeline["total_contributions"] > 0).sum()) == 0:
+        st.info("No activity was found in the selected lookback period.")
+        return
+
+    period_start = timeline_meta.get("period_start")
+    period_end = timeline_meta.get("period_end")
+    expected_days = timeline_meta.get("expected_days")
+    if period_start and period_end and expected_days:
+        st.caption(
+            f"Window: {period_start} to {period_end} ({expected_days} days)",
+        )
+
+    kpis = _compute_behavior_kpis(timeline)
+    _render_behavior_metric_cards(kpis)
+
+    graph_timeline = _trim_leading_inactive_days(timeline)
+
+    st.subheader("Daily Activity Trend")
+    st.plotly_chart(build_daily_activity_trend(graph_timeline), width="stretch")
+
+    mix_col, month_col = st.columns(2)
+    with mix_col:
+        st.subheader("Weekly Contribution Mix")
+        st.plotly_chart(build_weekly_mix_chart(graph_timeline), width="stretch")
+
+    with month_col:
+        st.subheader("Monthly Contribution Volume")
+        st.plotly_chart(build_monthly_volume_chart(graph_timeline), width="stretch")
 
 
 def render_executive_summary(metric_df, total_metrics):
