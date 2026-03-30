@@ -268,7 +268,7 @@ def _event_counts_from_event(event: dict[str, Any]) -> dict[str, int]:
     ref_type = str(push_data.get("ref_type", "")).lower()
     push_action = str(push_data.get("action", "")).lower()
     branch_ref = str(push_data.get("ref", "")).strip()
-    counts = dict.fromkeys(BASE_METRIC_KEYS, 0)
+    counts: dict[str, int] = dict.fromkeys(BASE_METRIC_KEYS, 0)
     is_branch_creation_push = action.startswith("pushed new") or (
         action.startswith("pushed")
         and ref_type == "branch"

@@ -1,6 +1,6 @@
 Report
 ======
-1126 statements analysed.
+1130 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -34,6 +34,7 @@ gitlab_stats
 | \-timeline_utils (gitlab_stats.gitlab_stats_api_ingester)
 \-gitlab_stats_api_ingester (gitlab_stats.dashboard)
 \-gitlab_stats_parser (gitlab_stats.dashboard)
+holidays (gitlab_stats.dashboard_utils.sections)
 numpy (gitlab_stats.dashboard_utils.charts)
 pandas (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.dashboard_utils.timeline_utils)
 plotly
@@ -43,7 +44,7 @@ streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_st
 
 
 
-2533 lines have been analyzed
+2538 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -51,13 +52,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |1751   |69.13 |
+|code      |1755   |69.15 |
 +----------+-------+------+
-|docstring |330    |13.03 |
+|docstring |330    |13.00 |
 +----------+-------+------+
 |comment   |24     |0.95  |
 +----------+-------+------+
-|empty     |428    |16.90 |
+|empty     |429    |16.90 |
 +----------+-------+------+
 
 

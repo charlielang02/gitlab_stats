@@ -383,7 +383,12 @@ def main():
     """Run the dashboard app."""
     configure_page()
 
-    metrics, total_metrics, timeline_df, timeline_meta = get_metrics()
+    result = get_metrics()
+    if result is None:
+        st.error("Unable to load metrics. Please check your data source.")
+        st.stop()
+
+    metrics, total_metrics, timeline_df, timeline_meta = result
     metric_df, ordered_columns = prepare_metric_df(metrics)
 
     render_executive_summary(metric_df, total_metrics)

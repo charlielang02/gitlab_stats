@@ -20,6 +20,7 @@ requires = ["poetry-core>=2.0.0"]
 packages = [{include = "gitlab_stats"}]
 
 [tool.poetry.dependencies]
+holidays = "^0.93"
 pandas = "^2.3.3"
 plotly = "^5.18.0"
 python-dotenv = "^1.2.2"

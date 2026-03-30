@@ -116,7 +116,7 @@ def _compute_collab_contributions(data):
 
 def _aggregate_metrics(metrics):
     """Compute derived project and total metrics from base metric counters."""
-    total_metrics = defaultdict(int)
+    total_metrics = defaultdict(float)
 
     for data in metrics.values():
         code_total = _compute_code_contributions(data)
