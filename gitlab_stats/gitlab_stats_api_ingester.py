@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from collections import defaultdict
 from datetime import UTC
 from datetime import date
@@ -25,10 +24,7 @@ from urllib.parse import urlparse
 from urllib.request import Request
 from urllib.request import urlopen
 
-try:
-    import streamlit as st
-except ImportError:  # pragma: no cover - optional runtime dependency
-    st = None
+from dotenv import load_dotenv
 
 from gitlab_stats import config
 from gitlab_stats.dashboard_utils.activity_rules import HISTORY_PUSH_THRESHOLD
@@ -37,8 +33,14 @@ from gitlab_stats.dashboard_utils.activity_rules import MERGE_COMMIT_TITLE_RE
 from gitlab_stats.dashboard_utils.metrics_schema import BASE_METRIC_KEYS
 from gitlab_stats.dashboard_utils.metrics_schema import TOTAL_COUNT_METRIC_KEYS
 from gitlab_stats.dashboard_utils.timeline_utils import build_timeline
+from gitlab_stats.database.supabase_client import SupabaseConfigError
+from gitlab_stats.database.supabase_client import SupabaseRequestError
+from gitlab_stats.database.supabase_client import fetch_events_from_supabase
+from gitlab_stats.settings import read_setting
 
 logger = logging.getLogger(__name__)
+
+load_dotenv()
 
 
 def _api_window() -> tuple[date, date]:
@@ -57,19 +59,7 @@ def _to_int(value: Any) -> int:
 
 def _read_setting(name: str) -> str:
     """Read config from env first, then Streamlit Secrets when available."""
-    env_value = os.getenv(name)
-    if env_value:
-        return env_value
-
-    if st is None:
-        return ""
-
-    try:
-        secret_value = st.secrets.get(name)
-    except (AttributeError, RuntimeError, KeyError, TypeError):
-        return ""
-
-    return str(secret_value).strip() if secret_value else ""
+    return read_setting(name)
 
 
 def _request_json(url: str, token: str) -> list[dict[str, Any]] | dict[str, Any]:
@@ -268,7 +258,7 @@ def _event_counts_from_event(event: dict[str, Any]) -> dict[str, int]:
     ref_type = str(push_data.get("ref_type", "")).lower()
     push_action = str(push_data.get("action", "")).lower()
     branch_ref = str(push_data.get("ref", "")).strip()
-    counts = dict.fromkeys(BASE_METRIC_KEYS, 0)
+    counts: dict[str, int] = dict.fromkeys(BASE_METRIC_KEYS, 0)
     is_branch_creation_push = action.startswith("pushed new") or (
         action.startswith("pushed")
         and ref_type == "branch"
@@ -526,3 +516,156 @@ def fetch_metrics_from_api(
 
     metrics, total_metrics, _, _ = result_with_time
     return metrics, total_metrics
+
+
+def fetch_event_records_from_api(
+    user_id: int | None = None,
+) -> list[dict[str, Any]] | None:
+    """Fetch normalized API event records for external storage backends."""
+    result: list[dict[str, Any]] | None = None
+    try:
+        api_token = _read_setting("GITLAB_API_TOKEN")
+        api_base_url = _read_setting("GITLAB_API_BASE_URL")
+        if not api_token or not api_base_url:
+            logger.warning(
+                "API credentials not configured. Set GITLAB_API_TOKEN and "
+                "GITLAB_API_BASE_URL in .env file to enable API ingestion.",
+            )
+            return None
+
+        resolved_user_id = _resolve_user_id(user_id, api_base_url, api_token)
+        if resolved_user_id is None:
+            logger.error("Unable to resolve authenticated GitLab user id")
+            return None
+
+        period_start, period_end = _api_window()
+        events = _fetch_events(
+            base_url=api_base_url,
+            token=api_token,
+            user_id=resolved_user_id,
+            after_date=period_start.isoformat(),
+            before_date=period_end.isoformat(),
+        )
+        if not events:
+            return []
+
+        _, event_records, _ = _build_non_zero_metrics(events, api_base_url, api_token)
+        normalized_records: list[dict[str, Any]] = []
+        for record in event_records:
+            event_date = record.get("event_date")
+            if event_date is None:
+                continue
+
+            normalized_records.append(
+                {
+                    "event_date": event_date.isoformat(),
+                    "project": str(record.get("project", "")).strip(),
+                    "event_type": str(record.get("event_type", "")).strip(),
+                    "count": _to_int(record.get("count", 0)),
+                },
+            )
+
+        result = normalized_records
+
+    except (HTTPError, URLError):
+        logger.exception("GitLab API connectivity failure")
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError, TimeoutError):
+        logger.exception("Failed to parse GitLab API response")
+
+    return result
+
+
+def fetch_metrics_from_supabase_with_time() -> (  # pylint: disable=too-many-locals
+    tuple[dict[str, Any], dict[str, Any], Any, dict[str, bool | int | str]] | None
+):
+    """Fetch metrics from Supabase event rows and rebuild dashboard timeline."""
+    result: (
+        tuple[dict[str, Any], dict[str, Any], Any, dict[str, bool | int | str]] | None
+    ) = None
+    try:
+        lookback_days = max(1, _to_int(getattr(config, "SUPABASE_LOOKBACK_DAYS", 365)))
+        supabase_rows = fetch_events_from_supabase(lookback_days=lookback_days)
+        if not supabase_rows:
+            logger.warning(
+                "No Supabase event rows found for configured lookback window",
+            )
+            return None
+
+        metrics: dict[str, dict[str, Any]] = defaultdict(lambda: defaultdict(int))
+        event_records: list[dict[str, Any]] = []
+        has_real_dates = False
+
+        for row in supabase_rows:
+            project_name = str(row.get("project", "")).strip()
+            event_type = str(row.get("event_type", "")).strip()
+            count = _to_int(row.get("count", 0))
+            if not project_name or event_type not in BASE_METRIC_KEYS or count <= 0:
+                continue
+
+            project_data = metrics[project_name]
+            project_data[event_type] += count
+
+            parsed_date = None
+            raw_date = row.get("event_date")
+            if raw_date:
+                try:
+                    parsed_date = date.fromisoformat(str(raw_date))
+                except ValueError:
+                    parsed_date = None
+
+            has_real_dates = has_real_dates or parsed_date is not None
+            event_records.append(
+                {
+                    "event_date": parsed_date,
+                    "project": project_name,
+                    "event_type": event_type,
+                    "count": count,
+                },
+            )
+
+        non_zero_metrics: dict[str, dict[str, Any]] = {}
+        for project_name, project_data in metrics.items():
+            _derive_project_totals(project_data)
+            if _to_int(project_data.get("total_contributions", 0)) > 0:
+                non_zero_metrics[project_name] = project_data
+
+        if not non_zero_metrics:
+            return None
+
+        total_metrics = _aggregate_totals(non_zero_metrics)
+        normalized_metrics = {
+            project: dict(data) for project, data in non_zero_metrics.items()
+        }
+
+        dated_records: list[date] = [
+            record["event_date"]
+            for record in event_records
+            if isinstance(record.get("event_date"), date)
+        ]
+        if dated_records:
+            period_start = min(dated_records)
+            period_end = max(dated_records)
+        else:
+            period_start, period_end = _api_window()
+
+        timeline_df, timeline_meta = build_timeline(
+            event_records,
+            has_real_dates,
+            period_start=period_start,
+            period_end=period_end,
+        )
+        timeline_meta["source"] = "supabase"
+        result = (normalized_metrics, total_metrics, timeline_df, timeline_meta)
+
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        json.JSONDecodeError,
+        TimeoutError,
+        SupabaseConfigError,
+        SupabaseRequestError,
+    ):
+        logger.exception("Failed to parse Supabase event response")
+
+    return result
