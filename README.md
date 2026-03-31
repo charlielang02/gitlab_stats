@@ -17,7 +17,9 @@ The current package is built around a Supabase-first data flow:
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage](#usage)
+- [Timeframe Controls](#timeframe-controls)
 - [Windows Task Scheduler (Recommended)](#windows-task-scheduler-recommended)
+- [Planned Next Branch](#planned-next-branch)
 - [Project Structure](#project-structure)
 - [Development](#development)
 - [License](#license)
@@ -29,6 +31,7 @@ The current package is built around a Supabase-first data flow:
 - Supabase sync CLI for scheduled backfills
 - Streamlit + Plotly interactive analytics dashboard
 - Behavior analysis from real timeline data
+- Dynamic timeframe selector (7-day minimum up to all available history)
 - CSV upload fallback for offline viewing/export replay
 - Pre-commit, linting, and test tooling via Poetry
 
@@ -138,6 +141,19 @@ Load order is:
 
 The dashboard also provides a `Refresh Data Cache` button to clear Streamlit cache and re-fetch data.
 
+## Timeframe Controls
+
+The dashboard includes a dynamic timeframe selector shown above the Executive Summary.
+
+- Presets: Last 7 days, Last 30 days, Last 90 days, Last 6 months, Last 1 year, YTD, All time, Custom
+- Minimum window: 7 days
+- Maximum window: all available contribution history (earliest to latest date available)
+
+Behavior-analysis chart visibility is window-aware:
+
+- Weekly Contribution Mix is hidden for windows shorter than 4 weeks
+- Monthly Contribution Volume is hidden for windows shorter than 2 months
+
 ## Windows Task Scheduler (Recommended)
 
 For internship-period automation, schedule the Supabase sync command at login or daily:
@@ -152,6 +168,16 @@ Suggested scheduler settings:
 - Run whether user is logged on or not (if permissions allow)
 - Start in: repository root directory
 - Redirect output to a log file for troubleshooting
+
+## Planned Next Branch
+
+Highest-priority upcoming change is Grafana integration in a separate branch.
+
+Current plan:
+
+- Reuse existing GitLab ingestion + normalization pipeline
+- Reuse Supabase event table as the primary data source for Grafana panels
+- Rebuild visualization layer in Grafana while keeping the current Streamlit dashboard stable
 
 ## Project Structure
 
