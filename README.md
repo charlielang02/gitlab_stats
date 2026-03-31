@@ -16,6 +16,7 @@ The current package is built around a Supabase-first data flow:
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Fork And Run Your Own Dashboard](#fork-and-run-your-own-dashboard)
 - [Usage](#usage)
 - [Timeframe Controls](#timeframe-controls)
 - [Windows Task Scheduler (Recommended)](#windows-task-scheduler-recommended)
@@ -110,6 +111,31 @@ Primary runtime flags are in `gitlab_stats/config.py`:
 - `API_MAX_EVENT_PAGES`: Upper bound on paginated API fetches
 - `DATA_CACHE_TTL_SECONDS`: Streamlit cache TTL for expensive loads
 - `STREAK_HOLIDAY_COUNTRY`: Optional ISO country code for holiday-aware streaks
+
+## Fork And Run Your Own Dashboard
+
+If you want your own personal dashboard, the intended flow is:
+
+1. Fork this repository into your own account.
+2. Clone your fork locally.
+3. Configure your own `.env` values (`GITLAB_API_TOKEN`, `GITLAB_API_BASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
+4. Run a sync from your own machine:
+
+```bash
+poetry run python -m gitlab_stats.database.supabase_sync
+```
+
+1. Run your dashboard locally (or deploy your fork):
+
+```bash
+poetry run streamlit run gitlab_stats/dashboard.py
+```
+
+Notes:
+
+- This project is user-configurable by environment variables; no personal account IDs are hardcoded.
+- If your GitLab API is internal-only, run sync from a machine that has network access to that GitLab instance.
+- You do not need a shared multi-user login flow to use this project for individual dashboards.
 
 ## Usage
 
