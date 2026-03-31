@@ -1,6 +1,6 @@
 Report
 ======
-1392 statements analysed.
+1239 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -8,13 +8,13 @@ Statistics by type
 +---------+-------+-----------+-----------+------------+---------+
 |type     |number |%documented |%badname |
 +=========+=======+============+=========+
-|module   |16     |100.00      |0.00     |
+|module   |15     |100.00      |0.00     |
 +---------+-------+------------+---------+
 |class    |2      |100.00      |0.00     |
 +---------+-------+------------+---------+
 |method   |6      |100.00      |0.00     |
 +---------+-------+------------+---------+
-|function |100    |100.00      |0.00     |
+|function |87     |100.00      |0.00     |
 +---------+-------+------------+---------+
 
 
@@ -27,15 +27,14 @@ dotenv (gitlab_stats.dashboard,gitlab_stats.database.supabase_sync,gitlab_stats.
 gitlab_stats
 \-config (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.sections,gitlab_stats.gitlab_stats_api_ingester)
 \-dashboard_utils
-| \-activity_rules (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser)
+| \-activity_rules (gitlab_stats.gitlab_stats_api_ingester)
 | \-charts (gitlab_stats.dashboard_utils.sections)
 | \-helpers (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.sections)
-| \-metrics_schema (gitlab_stats.dashboard_utils.timeline_utils,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.gitlab_stats_parser)
+| \-metrics_schema (gitlab_stats.dashboard_utils.timeline_utils,gitlab_stats.gitlab_stats_api_ingester)
 | \-timeline_utils (gitlab_stats.gitlab_stats_api_ingester)
 \-database
 | \-supabase_client (gitlab_stats.database.supabase_sync,gitlab_stats.gitlab_stats_api_ingester)
 \-gitlab_stats_api_ingester (gitlab_stats.dashboard,gitlab_stats.database.supabase_sync)
-\-gitlab_stats_parser (gitlab_stats.dashboard)
 \-settings (gitlab_stats.database.supabase_client,gitlab_stats.gitlab_stats_api_ingester)
 holidays (gitlab_stats.dashboard_utils.sections)
 numpy (gitlab_stats.dashboard_utils.charts)
@@ -48,7 +47,7 @@ streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_st
 
 
 
-3073 lines have been analyzed
+2764 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -56,13 +55,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |2131   |69.35 |
+|code      |1936   |70.04 |
 +----------+-------+------+
-|docstring |390    |12.69 |
+|docstring |349    |12.63 |
 +----------+-------+------+
-|comment   |26     |0.85  |
+|comment   |16     |0.58  |
 +----------+-------+------+
-|empty     |526    |17.12 |
+|empty     |463    |16.75 |
 +----------+-------+------+
 
 
