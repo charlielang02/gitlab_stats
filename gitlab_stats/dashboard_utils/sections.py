@@ -27,6 +27,8 @@ from gitlab_stats.dashboard_utils.helpers import compute_profile_summary
 from gitlab_stats.dashboard_utils.helpers import format_project_metrics_table
 
 BUSINESS_WEEKDAY_CUTOFF = 5
+MIN_DAYS_FOR_WEEKLY_MIX = 28
+MIN_DAYS_FOR_MONTHLY_VOLUME = 60
 
 try:
     import holidays as pyholidays
@@ -134,6 +136,25 @@ def _trim_leading_inactive_days(timeline: pd.DataFrame) -> pd.DataFrame:
     return timeline.loc[first_active_idx:].reset_index(drop=True)
 
 
+def _window_days(timeline: pd.DataFrame, timeline_meta: dict) -> int:
+    """Resolve selected window size for conditional chart visibility."""
+    requested_days = timeline_meta.get("requested_days")
+    if requested_days is not None:
+        try:
+            return int(requested_days)
+        except (TypeError, ValueError):
+            pass
+
+    expected_days = timeline_meta.get("expected_days")
+    if expected_days is not None:
+        try:
+            return int(expected_days)
+        except (TypeError, ValueError):
+            pass
+
+    return len(timeline)
+
+
 def render_behavior_analysis(timeline_df, timeline_meta):
     """Render timeline-driven behavior analytics section."""
     st.markdown("---")
@@ -176,18 +197,27 @@ def render_behavior_analysis(timeline_df, timeline_meta):
     _render_behavior_metric_cards(kpis)
 
     graph_timeline = _trim_leading_inactive_days(timeline)
+    selected_days = _window_days(timeline, timeline_meta)
 
     st.subheader("Daily Activity Trend")
     st.plotly_chart(build_daily_activity_trend(graph_timeline), width="stretch")
 
     mix_col, month_col = st.columns(2)
     with mix_col:
-        st.subheader("Weekly Contribution Mix")
-        st.plotly_chart(build_weekly_mix_chart(graph_timeline), width="stretch")
+        if selected_days >= MIN_DAYS_FOR_WEEKLY_MIX:
+            st.subheader("Weekly Contribution Mix")
+            st.plotly_chart(build_weekly_mix_chart(graph_timeline), width="stretch")
+        else:
+            st.subheader("Weekly Contribution Mix")
+            st.caption("Hidden for windows shorter than 4 weeks.")
 
     with month_col:
-        st.subheader("Monthly Contribution Volume")
-        st.plotly_chart(build_monthly_volume_chart(graph_timeline), width="stretch")
+        if selected_days >= MIN_DAYS_FOR_MONTHLY_VOLUME:
+            st.subheader("Monthly Contribution Volume")
+            st.plotly_chart(build_monthly_volume_chart(graph_timeline), width="stretch")
+        else:
+            st.subheader("Monthly Contribution Volume")
+            st.caption("Hidden for windows shorter than 2 months.")
 
 
 def render_executive_summary(metric_df, total_metrics):
