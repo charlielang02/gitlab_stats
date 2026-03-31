@@ -1,35 +1,44 @@
 # Changelog
 
-## Unreleased (2026-03-30)
+## Unreleased (2026-03-31)
 
 ### New Features
 
 #### Dashboard & Visualization
 
-* implement CSV upload functionality and enhance export options in dashboard
+* add conditional visibility for weekly and monthly contribution charts based on selected days
 * improve code quality and add charts
-* include plotly charts and cleanup dashboard, add csv download
+* include poltly charts and cleanup dashboard, add csv download
+
+#### Metrics & Data Handling
+
+* implement time window selection and date bounds fetching for metrics
+* integrate Supabase for metrics handling and add sync functionality
 * enhance metrics handling and configuration reading in dashboard and API ingester
 * implement caching for metrics loading and update configuration for data source visibility
+* enhance GitLab metrics fetching and processing with performance tracking
 
-#### GitLab Integration & Analytics
+#### API & Integration
 
 * enhance GitLab API integration with timeline analytics and behavior analysis features
-* enhance GitLab metrics fetching and processing with performance tracking
-* add gitlab API implementation and config
+* add gitlab API impleentation and config
 
-#### Data & Infrastructure
+#### Import/Export
 
-* integrate Supabase for metrics handling and add sync functionality
+* implement CSV upload functionality and enhance export options in dashboard
+
+#### Miscellaneous
+
+* add timeframe controls section to README with dynamic selector details
 * add placeholder txt file and logic, also fix import issue
 
 ### Fixes
 
-#### Code Quality & Typing
+#### Code & Typing
 
 * pylance warnings for typing, imports and none tuple unpacking
 
-#### Dashboard
+#### UI/UX
 
 * improve dashboard appearance
 * column ordering to group categories
@@ -41,21 +50,26 @@
 * move files to utils folder
 * modularize code and turn into methods
 
-#### Data Handling
+#### Configuration & Cleanup
 
 * remove unused parser and update data source configuration for CSV fallback
 
 ### Docs
 
-#### README Updates
+#### Changelog
+
+* update changelog for new features and fixes
+* update changelog for new features and fixes
+* changelog adding
+* add changelog
+
+#### README
 
 * update README for new features
 * update README with enhanced features and API integration details
 * README updates
 * add initial README
 
-#### Changelog Updates
+### Others
 
-* update changelog for new features and fixes
-* changelog adding
-* add changelog
+* update version to 0.2.0 in pyproject.toml
