@@ -28,6 +28,7 @@ from gitlab_stats.dashboard_utils.sections import render_profile
 from gitlab_stats.dashboard_utils.sections import render_project_deep_dive
 from gitlab_stats.dashboard_utils.sections import render_top_projects
 from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_api_with_time
+from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_supabase_with_time
 from gitlab_stats.gitlab_stats_parser import _parse_gitlab_log
 
 # Load environment variables from .env file if it exists
@@ -230,10 +231,23 @@ def _load_metrics_cached(
     request: dict[str, object],
 ):
     """Load metrics with cache key driven by source config and inputs."""
+    use_supabase = bool(request.get("use_supabase", False))
     use_api = bool(request.get("use_api", False))
     selected_path = str(request.get("selected_path", ""))
+    supabase_url = str(request.get("supabase_url", ""))
+    supabase_key = str(request.get("supabase_key", ""))
     api_base_url = str(request.get("api_base_url", ""))
     api_token = str(request.get("api_token", ""))
+
+    if use_supabase and supabase_url and supabase_key:
+        result = fetch_metrics_from_supabase_with_time()
+        if result is not None:
+            metrics, total_metrics, timeline_df, timeline_meta = result
+            normalized_metrics, normalized_totals = _normalize_metrics_for_cache(
+                metrics,
+                total_metrics,
+            )
+            return normalized_metrics, normalized_totals, timeline_df, timeline_meta
 
     if use_api and api_base_url and api_token:
         result = fetch_metrics_from_api_with_time()
@@ -301,7 +315,7 @@ def select_data_source():
     return selected_path
 
 
-def get_metrics():
+def get_metrics():  # pylint: disable=too-many-locals
     """Fetch metrics from configured source (API with fallback to parser).
 
     Returns:
@@ -322,6 +336,37 @@ def get_metrics():
         st.info("📄 Metrics loaded from uploaded CSV file")
         return uploaded_result
 
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+
+    if config.USE_SUPABASE:
+        supabase_start = perf_counter()
+        with st.spinner("Loading metrics from Supabase..."):
+            result = _load_metrics_cached(
+                {
+                    "use_supabase": True,
+                    "use_api": False,
+                    "selected_path": "",
+                    "parser_file_mtime_ns": 0,
+                    "supabase_url": supabase_url,
+                    "supabase_key": supabase_key,
+                    "api_base_url": "",
+                    "api_token": "",
+                    "supabase_lookback_days": config.SUPABASE_LOOKBACK_DAYS,
+                },
+            )
+        supabase_elapsed = perf_counter() - supabase_start
+
+        if result is not None:
+            if config.SHOW_DATA_SOURCE_INFO:
+                st.info(f"🗄️ Metrics loaded from Supabase in {supabase_elapsed:.2f}s")
+            if st.button("Refresh Data Cache", key="refresh_cache_supabase"):
+                st.cache_data.clear()
+                st.rerun()
+            return result
+
+        st.warning("Supabase data unavailable. Falling back to API/parser sources.")
+
     api_base_url = os.getenv("GITLAB_API_BASE_URL", "")
     api_token = os.getenv("GITLAB_API_TOKEN", "")
 
@@ -333,6 +378,9 @@ def get_metrics():
                     "use_api": True,
                     "selected_path": "",
                     "parser_file_mtime_ns": 0,
+                    "use_supabase": False,
+                    "supabase_url": "",
+                    "supabase_key": "",
                     "api_base_url": api_base_url,
                     "api_token": api_token,
                     "api_lookback_days": config.API_LOOKBACK_DAYS,
@@ -362,6 +410,9 @@ def get_metrics():
                 "use_api": False,
                 "selected_path": str(parser_path),
                 "parser_file_mtime_ns": parser_mtime_ns,
+                "use_supabase": False,
+                "supabase_url": "",
+                "supabase_key": "",
                 "api_base_url": api_base_url,
                 "api_token": api_token,
                 "api_lookback_days": config.API_LOOKBACK_DAYS,
