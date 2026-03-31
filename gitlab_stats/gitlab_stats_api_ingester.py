@@ -1,8 +1,7 @@
 """GitLab API data ingester for fetching metrics from live GitLab instances.
 
-This module provides an alternative to the file-based parser, pulling metrics
-directly from GitLab API. Returns the same metric dict structure as the parser
-for compatibility with the dashboard.
+This module fetches normalized contribution metrics from GitLab API and Supabase
+event rows for dashboard rendering.
 
 Credentials are loaded from environment variables (typically via .env file).
 """
@@ -35,6 +34,7 @@ from gitlab_stats.dashboard_utils.metrics_schema import TOTAL_COUNT_METRIC_KEYS
 from gitlab_stats.dashboard_utils.timeline_utils import build_timeline
 from gitlab_stats.database.supabase_client import SupabaseConfigError
 from gitlab_stats.database.supabase_client import SupabaseRequestError
+from gitlab_stats.database.supabase_client import fetch_event_date_bounds_from_supabase
 from gitlab_stats.database.supabase_client import fetch_events_from_supabase
 from gitlab_stats.settings import read_setting
 
@@ -43,7 +43,15 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 
-def _api_window() -> tuple[date, date]:
+def _api_window(
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> tuple[date, date]:
+    if period_start is not None and period_end is not None:
+        if period_start > period_end:
+            period_start, period_end = period_end, period_start
+        return period_start, period_end
+
     lookback_days = max(1, _to_int(config.API_LOOKBACK_DAYS))
     period_end = datetime.now(tz=UTC).date()
     period_start = period_end - timedelta(days=lookback_days - 1)
@@ -403,6 +411,8 @@ def _build_non_zero_metrics(
 
 def fetch_metrics_from_api_with_time(
     user_id: int | None = None,
+    period_start: date | None = None,
+    period_end: date | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], Any, dict[str, bool | int | str]] | None:
     """Fetch API metrics plus timeline dataframe and timeline metadata."""
     result: (
@@ -424,7 +434,7 @@ def fetch_metrics_from_api_with_time(
             logger.error("Unable to resolve authenticated GitLab user id")
             return None
 
-        period_start, period_end = _api_window()
+        period_start, period_end = _api_window(period_start, period_end)
 
         events = _fetch_events(
             base_url=api_base_url,
@@ -434,7 +444,7 @@ def fetch_metrics_from_api_with_time(
             before_date=period_end.isoformat(),
         )
         if not events:
-            logger.warning("No events returned from GitLab API; using parser fallback")
+            logger.warning("No events returned from GitLab API for selected window")
             return None
 
         non_zero_metrics, event_records, has_real_dates = _build_non_zero_metrics(
@@ -474,6 +484,8 @@ def fetch_metrics_from_api_with_time(
 
 def fetch_metrics_from_api(
     user_id: int | None = None,
+    period_start: date | None = None,
+    period_end: date | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
     """
     Fetch GitLab metrics from API for a user.
@@ -486,7 +498,7 @@ def fetch_metrics_from_api(
         user_id: Optional user ID; if None, uses authenticated user
 
     Returns:
-        Tuple of (metrics, total_metrics) dicts matching parser output format, or None on failure.
+        Tuple of (metrics, total_metrics) dicts for dashboard rendering, or None on failure.
 
     Metric dict format:
     {
@@ -510,7 +522,11 @@ def fetch_metrics_from_api(
 
     total_metrics: Same structure but aggregated across all projects.
     """
-    result_with_time = fetch_metrics_from_api_with_time(user_id=user_id)
+    result_with_time = fetch_metrics_from_api_with_time(
+        user_id=user_id,
+        period_start=period_start,
+        period_end=period_end,
+    )
     if result_with_time is None:
         return None
 
@@ -520,6 +536,8 @@ def fetch_metrics_from_api(
 
 def fetch_event_records_from_api(
     user_id: int | None = None,
+    period_start: date | None = None,
+    period_end: date | None = None,
 ) -> list[dict[str, Any]] | None:
     """Fetch normalized API event records for external storage backends."""
     result: list[dict[str, Any]] | None = None
@@ -538,7 +556,7 @@ def fetch_event_records_from_api(
             logger.error("Unable to resolve authenticated GitLab user id")
             return None
 
-        period_start, period_end = _api_window()
+        period_start, period_end = _api_window(period_start, period_end)
         events = _fetch_events(
             base_url=api_base_url,
             token=api_token,
@@ -575,16 +593,31 @@ def fetch_event_records_from_api(
     return result
 
 
-def fetch_metrics_from_supabase_with_time() -> (  # pylint: disable=too-many-locals
-    tuple[dict[str, Any], dict[str, Any], Any, dict[str, bool | int | str]] | None
-):
+def fetch_supabase_date_bounds() -> tuple[date, date] | None:
+    """Fetch earliest and latest event dates from Supabase."""
+    try:
+        return fetch_event_date_bounds_from_supabase()
+    except (SupabaseConfigError, SupabaseRequestError, ValueError, TypeError):
+        logger.exception("Failed to fetch Supabase event date bounds")
+        return None
+
+
+def fetch_metrics_from_supabase_with_time(  # pylint: disable=too-many-locals
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], Any, dict[str, bool | int | str]] | None:
     """Fetch metrics from Supabase event rows and rebuild dashboard timeline."""
     result: (
         tuple[dict[str, Any], dict[str, Any], Any, dict[str, bool | int | str]] | None
     ) = None
     try:
         lookback_days = max(1, _to_int(getattr(config, "SUPABASE_LOOKBACK_DAYS", 365)))
-        supabase_rows = fetch_events_from_supabase(lookback_days=lookback_days)
+        query_start, query_end = _api_window(period_start, period_end)
+        supabase_rows = fetch_events_from_supabase(
+            lookback_days=lookback_days,
+            period_start=query_start,
+            period_end=query_end,
+        )
         if not supabase_rows:
             logger.warning(
                 "No Supabase event rows found for configured lookback window",
@@ -643,16 +676,16 @@ def fetch_metrics_from_supabase_with_time() -> (  # pylint: disable=too-many-loc
             if isinstance(record.get("event_date"), date)
         ]
         if dated_records:
-            period_start = min(dated_records)
-            period_end = max(dated_records)
+            timeline_start = min(dated_records)
+            timeline_end = max(dated_records)
         else:
-            period_start, period_end = _api_window()
+            timeline_start, timeline_end = query_start, query_end
 
         timeline_df, timeline_meta = build_timeline(
             event_records,
             has_real_dates,
-            period_start=period_start,
-            period_end=period_end,
+            period_start=timeline_start,
+            period_end=timeline_end,
         )
         timeline_meta["source"] = "supabase"
         result = (normalized_metrics, total_metrics, timeline_df, timeline_meta)

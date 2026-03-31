@@ -164,9 +164,12 @@ def render_behavior_analysis(timeline_df, timeline_meta):
     period_start = timeline_meta.get("period_start")
     period_end = timeline_meta.get("period_end")
     expected_days = timeline_meta.get("expected_days")
+    window_label = timeline_meta.get("window_label")
+    if window_label:
+        st.caption(f"Selected timeframe: {window_label}")
     if period_start and period_end and expected_days:
         st.caption(
-            f"Window: {period_start} to {period_end} ({expected_days} days)",
+            f"Data coverage: {period_start} to {period_end} ({expected_days} days)",
         )
 
     kpis = _compute_behavior_kpis(timeline)

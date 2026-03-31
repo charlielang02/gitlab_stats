@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC
+from datetime import date
 from datetime import datetime
 from datetime import timedelta
 from typing import Any
@@ -154,18 +155,88 @@ def _chunked(
     return [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
 
 
-def fetch_events_from_supabase(lookback_days: int) -> list[dict[str, Any]]:
+def _parse_iso_date(raw_value: Any) -> date | None:
+    """Parse a date-like value into a date object."""
+    if not raw_value:
+        return None
+    try:
+        return date.fromisoformat(str(raw_value))
+    except ValueError:
+        return None
+
+
+def fetch_event_date_bounds_from_supabase() -> tuple[date, date] | None:
+    """Fetch earliest and latest event dates using lightweight limit queries."""
+    read_keys = _read_api_keys_for_select()
+
+    oldest_path = "events?" + urlencode(
+        {
+            "select": "event_date",
+            "order": "event_date.asc",
+            "limit": 1,
+        },
+    )
+    newest_path = "events?" + urlencode(
+        {
+            "select": "event_date",
+            "order": "event_date.desc",
+            "limit": 1,
+        },
+    )
+
+    last_error: SupabaseRequestError | None = None
+    for read_key in read_keys:
+        try:
+            oldest_payload = _request_json("GET", oldest_path, read_key)
+            newest_payload = _request_json("GET", newest_path, read_key)
+        except SupabaseRequestError as exc:
+            last_error = exc
+            continue
+
+        if not isinstance(oldest_payload, list) or not isinstance(newest_payload, list):
+            raise SupabaseRequestError.expected_list_payload()
+        if not oldest_payload or not newest_payload:
+            return None
+
+        start_date = _parse_iso_date(oldest_payload[0].get("event_date"))
+        end_date = _parse_iso_date(newest_payload[0].get("event_date"))
+        if start_date is None or end_date is None:
+            return None
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+        return start_date, end_date
+
+    if last_error is not None:
+        raise last_error
+    return None
+
+
+def fetch_events_from_supabase(
+    lookback_days: int,
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> list[dict[str, Any]]:
     """Fetch event rows from Supabase for the dashboard timeline window."""
     lookback_days = max(lookback_days, 1)
 
     read_keys = _read_api_keys_for_select()
-    after_date = datetime.now(tz=UTC).date() - timedelta(days=lookback_days - 1)
+    if period_start is not None and period_end is not None:
+        if period_start > period_end:
+            period_start, period_end = period_end, period_start
+        after_date = period_start
+        before_date = period_end
+    else:
+        before_date = datetime.now(tz=UTC).date()
+        after_date = before_date - timedelta(days=lookback_days - 1)
 
     query = urlencode(
         {
             "select": "event_date,project,event_type,count",
-            "event_date": f"gte.{after_date.isoformat()}",
             "order": "event_date.asc",
+            "and": (
+                f"(event_date.gte.{after_date.isoformat()},"
+                f"event_date.lte.{before_date.isoformat()})"
+            ),
         },
     )
     path = f"events?{query}"
