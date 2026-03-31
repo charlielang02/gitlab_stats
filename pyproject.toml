@@ -10,7 +10,7 @@ maintainers = [
 name = "gitlab_stats"
 readme = "README.md"
 requires-python = ">=3.11, <4"
-version = "0.1.0"
+version = "0.2.0"
 
 [build-system]
 build-backend = "poetry.core.masonry.api"
@@ -20,6 +20,7 @@ requires = ["poetry-core>=2.0.0"]
 packages = [{include = "gitlab_stats"}]
 
 [tool.poetry.dependencies]
+holidays = "^0.93"
 pandas = "^2.3.3"
 plotly = "^5.18.0"
 python-dotenv = "^1.2.2"
