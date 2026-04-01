@@ -1,75 +1,100 @@
 # Changelog
 
-## Unreleased (2026-03-31)
+## Unreleased (2026-04-01)
 
-### New Features
+### New features
 
-#### Dashboard & Visualization
+#### Testing and coverage
 
-* add conditional visibility for weekly and monthly contribution charts based on selected days
-* improve code quality and add charts
-* include poltly charts and cleanup dashboard, add csv download
+* Add unit tests for dashboard functionality and improve coverage thresholds
+* Add unit tests for dashboard chart builders
+* Add unit tests for dashboard helper utilities
+* Add initial Codecov configuration for coverage reporting
+* Add unit tests for Supabase client and improve error messages
+* Add unit tests for settings helpers, Supabase sync, and timeline utilities
 
-#### Metrics & Data Handling
+#### Documentation and onboarding
 
-* implement time window selection and date bounds fetching for metrics
-* integrate Supabase for metrics handling and add sync functionality
-* enhance metrics handling and configuration reading in dashboard and API ingester
-* implement caching for metrics loading and update configuration for data source visibility
-* enhance GitLab metrics fetching and processing with performance tracking
+* Add section for forking and running personal dashboards in README
+* Add timeframe controls section to README with dynamic selector details
 
-#### API & Integration
+#### Dashboard and metrics functionality
 
-* enhance GitLab API integration with timeline analytics and behavior analysis features
-* add gitlab API impleentation and config
+* Add conditional visibility for weekly and monthly contribution charts based on selected days
+* Implement time window selection and date bounds fetching for metrics
+* Integrate Supabase for metrics handling and add sync functionality
+* Implement CSV upload functionality and enhance export options in dashboard
+* Enhance metrics handling and configuration reading in dashboard and API ingester
+* Implement caching for metrics loading and update configuration for data source visibility
 
-#### Import/Export
+#### Integrations and analytics
 
-* implement CSV upload functionality and enhance export options in dashboard
+* Enhance GitLab API integration with timeline analytics and behavior analysis features
+* Enhance GitLab metrics fetching and processing with performance tracking
+* Add GitLab API implementation and config
 
-#### Miscellaneous
+#### UI and charts
 
-* add timeframe controls section to README with dynamic selector details
-* add placeholder txt file and logic, also fix import issue
+* Improve code quality and add charts
+* Include Plotly charts and clean up dashboard, add CSV download
+
+#### Miscellaneous additions
+
+* Add placeholder txt file and logic, also fix import issue
 
 ### Fixes
 
-#### Code & Typing
+#### CI and tooling
 
-* pylance warnings for typing, imports and none tuple unpacking
+* Unterminated string for CI test coverage
+* Update cache method from 'poetry' to 'pip' in CI workflow
 
-#### UI/UX
+#### Code quality and typing
 
-* improve dashboard appearance
-* column ordering to group categories
+* Pylance warnings for typing, imports, and None tuple unpacking
 
-### Refactorings
+#### UI and data presentation
 
-#### Code Organization
+* Improve dashboard appearance
+* Column ordering to group categories
 
-* move files to utils folder
-* modularize code and turn into methods
+#### Refactorings
 
-#### Configuration & Cleanup
+#### Code organization
 
-* remove unused parser and update data source configuration for CSV fallback
+* Remove unused parser and update data source configuration for CSV fallback
+* Move files to utils folder
+
+#### Structure and maintainability
+
+* Modularize code and turn into methods
 
 ### Docs
 
-#### Changelog
+#### README updates
 
-* update changelog for new features and fixes
-* update changelog for new features and fixes
-* changelog adding
-* add changelog
-
-#### README
-
-* update README for new features
-* update README with enhanced features and API integration details
+* Remove planned next branch section and update coverage thresholds in README
+* Update README for new features
+* Update README with enhanced features and API integration details
 * README updates
-* add initial README
+* Add initial README
+
+#### Changelog maintenance
+
+* Update changelog for new features and fixes
+* Update changelog for new features and fixes
+* Changelog adding
+* Add changelog
 
 ### Others
 
-* update version to 0.2.0 in pyproject.toml
+#### Testing and coverage workflows
+
+* Add tests for sections and coverage reports
+* Add code coverage reporting and workflow
+* Update test files for improved coverage
+
+#### Maintenance
+
+* Update changelog for new features and fixes, and correct section headers
+* Update version to 0.2.0 in pyproject.toml
