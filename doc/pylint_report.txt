@@ -1,6 +1,6 @@
 Report
 ======
-1424 statements analysed.
+1425 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -47,7 +47,7 @@ streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_st
 
 
 
-3202 lines have been analyzed
+3207 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -55,13 +55,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |2254   |70.39 |
+|code      |2257   |70.38 |
 +----------+-------+------+
-|docstring |412    |12.87 |
+|docstring |414    |12.91 |
 +----------+-------+------+
 |comment   |16     |0.50  |
 +----------+-------+------+
-|empty     |520    |16.24 |
+|empty     |520    |16.21 |
 +----------+-------+------+
 
 
