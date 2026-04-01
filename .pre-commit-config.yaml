@@ -222,6 +222,15 @@ repos:
         always_run: true
         stages:
           - pre-commit
+      - id: pylint-tests
+        name: LINTERS - Pylint test files (protected-access disabled)
+        entry: poetry run pylint test --disable=protected-access
+        language: system
+        files: ^test/.*\.py$
+        pass_filenames: false
+        always_run: true
+        stages:
+          - pre-commit
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: "v0.45.0"
     hooks:

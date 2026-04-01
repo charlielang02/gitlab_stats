@@ -23,6 +23,7 @@ The current package is built around a Supabase-first data flow:
 - [Planned Next Branch](#planned-next-branch)
 - [Project Structure](#project-structure)
 - [Development](#development)
+- [Coverage In Pull Requests](#coverage-in-pull-requests)
 - [License](#license)
 
 ## What Is Included
@@ -263,6 +264,37 @@ Run tests:
 ```bash
 poetry run pytest
 ```
+
+Run tests with coverage and a minimum threshold:
+
+```bash
+poetry run pytest --cov=gitlab_stats --cov-branch --cov-report=term-missing --cov-report=xml --cov-fail-under=13
+```
+
+## Coverage In Pull Requests
+
+This repository includes a GitHub Actions workflow at `.github/workflows/ci.yml` that:
+
+- runs on pushes and pull requests
+- executes pytest with branch coverage
+- fails if total coverage drops below 13% (initial baseline gate)
+- uploads `coverage.xml` as a build artifact
+- optionally uploads coverage to Codecov for PR annotations
+
+As coverage improves, increase the `--cov-fail-under` value in `.github/workflows/ci.yml`
+so quality gates get stricter over time.
+
+To make this visible and enforceable in GitHub:
+
+1. Go to repository Settings -> Branches -> Branch protection rules.
+2. Require status checks before merging.
+3. Select the `Tests and coverage` check from the CI workflow.
+
+Optional (recommended) for richer PR coverage UI:
+
+1. Connect the repository to Codecov.
+2. Add `CODECOV_TOKEN` as a repository secret (required for private repositories).
+3. Keep the existing Codecov step enabled to get coverage comments and patch coverage in PRs.
 
 ## License
 

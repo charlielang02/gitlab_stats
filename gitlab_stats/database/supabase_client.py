@@ -27,17 +27,21 @@ class SupabaseConfigError(RuntimeError):
     @classmethod
     def missing_url(cls) -> SupabaseConfigError:
         """Build missing URL error."""
-        return cls("SUPABASE_URL is not configured")
+        return cls("Missing url (SUPABASE_URL) is required for Supabase API access")
 
     @classmethod
     def missing_read_key(cls) -> SupabaseConfigError:
         """Build missing read key error."""
-        return cls("Missing read key (SUPABASE_SERVICE_ROLE_KEY)")
+        return cls(
+            "Missing read key (SUPABASE_SERVICE_ROLE_KEY) is required for select operations",
+        )
 
     @classmethod
     def missing_write_key(cls) -> SupabaseConfigError:
         """Build missing write key error."""
-        return cls("SUPABASE_SERVICE_ROLE_KEY is required for upsert operations")
+        return cls(
+            "Missing write key (SUPABASE_SERVICE_ROLE_KEY) is required for upsert operations",
+        )
 
 
 class SupabaseRequestError(RuntimeError):

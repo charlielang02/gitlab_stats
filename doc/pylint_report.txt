@@ -47,7 +47,7 @@ streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_st
 
 
 
-3202 lines have been analyzed
+3206 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -55,13 +55,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |2254   |70.39 |
+|code      |2256   |70.37 |
 +----------+-------+------+
-|docstring |412    |12.87 |
+|docstring |414    |12.91 |
 +----------+-------+------+
 |comment   |16     |0.50  |
 +----------+-------+------+
-|empty     |520    |16.24 |
+|empty     |520    |16.22 |
 +----------+-------+------+
 
 
