@@ -20,7 +20,6 @@ The current package is built around a Supabase-first data flow:
 - [Usage](#usage)
 - [Timeframe Controls](#timeframe-controls)
 - [Windows Task Scheduler (Recommended)](#windows-task-scheduler-recommended)
-- [Planned Next Branch](#planned-next-branch)
 - [Project Structure](#project-structure)
 - [Development](#development)
 - [Coverage In Pull Requests](#coverage-in-pull-requests)
@@ -196,16 +195,6 @@ Suggested scheduler settings:
 - Start in: repository root directory
 - Redirect output to a log file for troubleshooting
 
-## Planned Next Branch
-
-Highest-priority upcoming change is Grafana integration in a separate branch.
-
-Current plan:
-
-- Reuse existing GitLab ingestion + normalization pipeline
-- Reuse Supabase event table as the primary data source for Grafana panels
-- Rebuild visualization layer in Grafana while keeping the current Streamlit dashboard stable
-
 ## Project Structure
 
 ```bash
@@ -237,7 +226,15 @@ gitlab_stats/
 │       └── supabase_sync.py
 ├── test/
 │   ├── __init__.py
-│   └── test_gitlab_stats.py
+│   ├── test_charts.py
+│   ├── test_dashboard.py
+│   ├── test_gitlab_stats_api_ingester.py
+│   ├── test_helpers.py
+│   ├── test_sections.py
+│   ├── test_settings.py
+│   ├── test_supabase_client.py
+│   ├── test_supabase_sync.py
+│   └── test_timeline_utils.py
 └── tools/
     ├── __init__.py
     ├── after_checkout.bat
@@ -268,7 +265,7 @@ poetry run pytest
 Run tests with coverage and a minimum threshold:
 
 ```bash
-poetry run pytest --cov=gitlab_stats --cov-branch --cov-report=term-missing --cov-report=xml --cov-fail-under=13
+poetry run pytest --cov=gitlab_stats --cov-branch --cov-report=term-missing --cov-report=xml --cov-fail-under=80
 ```
 
 ## Coverage In Pull Requests
@@ -277,12 +274,12 @@ This repository includes a GitHub Actions workflow at `.github/workflows/ci.yml`
 
 - runs on pushes and pull requests
 - executes pytest with branch coverage
-- fails if total coverage drops below 13% (initial baseline gate)
+- fails if total coverage drops below 80%
 - uploads `coverage.xml` as a build artifact
 - optionally uploads coverage to Codecov for PR annotations
 
-As coverage improves, increase the `--cov-fail-under` value in `.github/workflows/ci.yml`
-so quality gates get stricter over time.
+Increase the `--cov-fail-under` value in `.github/workflows/ci.yml`
+as coverage improves so quality gates continue getting stricter.
 
 To make this visible and enforceable in GitHub:
 
