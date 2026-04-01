@@ -30,7 +30,7 @@ jobs:
             --cov-branch \
             --cov-report=term-missing \
             --cov-report=xml \
-            --cov-fail-under=13
+            --cov-fail-under=80
       - name: Build coverage summary for workflow output
         run: |
           poetry run coverage report -m > coverage.txt
