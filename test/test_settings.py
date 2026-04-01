@@ -9,7 +9,7 @@ import pytest
 from gitlab_stats import settings
 
 
-class _FakeSecrets:
+class _FakeSecrets:  # pylint: disable=too-few-public-methods
     """Minimal secrets stub for streamlit-style access."""
 
     def __init__(self, value_by_key=None, error=None):
