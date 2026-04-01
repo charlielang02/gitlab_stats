@@ -112,7 +112,7 @@ def _fetch_authenticated_user(base_url: str, token: str) -> dict[str, Any]:
     return payload
 
 
-def _fetch_events(
+def _fetch_events(  # pylint: disable=too-many-locals
     base_url: str,
     token: str,
     user_id: int,
@@ -127,14 +127,15 @@ def _fetch_events(
     page = 1
     hit_pagination_limit = False
     while page <= max_pages:
+        query_params = {
+            "after": after_date,
+            "before": before_date,
+            "page": page,
+            "per_page": per_page,
+        }
         url = (
             f"{base_url.rstrip('/')}/users/{user_id}/events?"
-            f"{urlencode({
-                'after': after_date,
-                'before': before_date,
-                'page': page,
-                'per_page': per_page,
-            })}"
+            f"{urlencode(query_params)}"
         )
         payload, headers = _request_json_with_headers(url, token)
 
