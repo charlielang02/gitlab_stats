@@ -9,6 +9,11 @@ The current package is built around a Supabase-first data flow:
 - Fall back to direct GitLab API reads when enabled
 - Fall back to uploaded CSV only when live sources are unavailable
 
+You can run this project in two supported modes:
+
+- **Quick local mode (~5 minutes):** Run the dashboard directly from the GitLab API (no Supabase required)
+- **Deployed mode (~15 minutes):** Sync data to Supabase, then run/deploy the Supabase-backed dashboard
+
 ## Table of Contents
 
 - [What Is Included](#what-is-included)
@@ -16,7 +21,9 @@ The current package is built around a Supabase-first data flow:
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Configuration](#configuration)
-- [Fork And Run Your Own Dashboard](#fork-and-run-your-own-dashboard)
+- [Choose Your Setup Path](#choose-your-setup-path)
+- [Quick Local Dashboard (API Only, ~5 Minutes)](#quick-local-dashboard-api-only-5-minutes)
+- [Deployed Dashboard With Supabase (~15 Minutes)](#deployed-dashboard-with-supabase-15-minutes)
 - [Usage](#usage)
 - [Timeframe Controls](#timeframe-controls)
 - [Windows Task Scheduler (Recommended)](#windows-task-scheduler-recommended)
@@ -63,7 +70,7 @@ graph TB
 - Poetry
 - Git
 - A GitLab Personal Access Token
-- A Supabase project URL and service role key
+- Supabase project URL + service role key (only for Supabase/deployed mode)
 
 ## Installation
 
@@ -112,24 +119,98 @@ Primary runtime flags are in `gitlab_stats/config.py`:
 - `DATA_CACHE_TTL_SECONDS`: Streamlit cache TTL for expensive loads
 - `STREAK_HOLIDAY_COUNTRY`: Optional ISO country code for holiday-aware streaks
 
-## Fork And Run Your Own Dashboard
+## Choose Your Setup Path
 
-If you want your own personal dashboard, the intended flow is:
+**Do users need to fork this repository?**
 
-1. Fork this repository into your own account.
-2. Clone your fork locally.
-3. Configure your own `.env` values (`GITLAB_API_TOKEN`, `GITLAB_API_BASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
-4. Run a sync from your own machine:
+- **No, not required.** A local user can clone this repository directly and run it.
+- **Forking is recommended** only if someone wants their own hosted/deployed copy
+(for example, Streamlit Community Cloud linked to their own GitHub account).
+
+Use one of the two setup paths below.
+
+## Quick Local Dashboard (API Only, ~5 Minutes)
+
+Use this when the user just needs a local dashboard quickly.
+
+1. Clone the repository (fork optional):
+
+```bash
+git clone <repository-url>
+cd gitlab_stats
+```
+
+1. Install Poetry and project dependencies:
+
+```powershell
+.\tools\install_poetry.bat
+.\tools\after_checkout.bat
+```
+
+1. Add a `.env` file with GitLab API settings only:
+
+```bash
+GITLAB_API_BASE_URL=https://<your-gitlab-host>/api/v4
+GITLAB_API_TOKEN=<your-gitlab-personal-access-token>
+```
+
+1. Enable API mode in `gitlab_stats/config.py`:
+
+- Set `USE_API = True`
+- Set `USE_SUPABASE = False`
+
+1. Start the dashboard:
+
+```bash
+poetry run streamlit run gitlab_stats/dashboard.py
+```
+
+Open the local URL shown by Streamlit (usually `http://localhost:8501`).
+
+## Deployed Dashboard With Supabase (~15 Minutes)
+
+Use this when you want persistent synced data and a shareable hosted dashboard.
+
+1. Clone or fork the repository.
+
+- Clone is fine for local-only use.
+- Fork if you plan to deploy from your own GitHub repository.
+
+1. Create a Supabase project and capture:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+1. Configure `.env` with both Supabase and API credentials:
+
+```bash
+SUPABASE_URL=https://<your-project>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+GITLAB_API_BASE_URL=https://<your-gitlab-host>/api/v4
+GITLAB_API_TOKEN=<your-gitlab-personal-access-token>
+```
+
+1. Configure `gitlab_stats/config.py` for Supabase-first mode:
+
+- Set `USE_SUPABASE = True`
+- Set `USE_API = True` (recommended fallback)
+
+1. Run an initial sync to populate Supabase:
 
 ```bash
 poetry run python -m gitlab_stats.database.supabase_sync
 ```
 
-1. Run your dashboard locally (or deploy your fork):
+1. Run locally to validate:
 
 ```bash
 poetry run streamlit run gitlab_stats/dashboard.py
 ```
+
+1. Deploy (optional but typical for this path):
+
+- Streamlit Community Cloud: connect your fork/repo and set the same secrets in the app settings.
+- Any other host: provide the same environment variables in deployment config.
 
 Notes:
 
@@ -182,7 +263,7 @@ Behavior-analysis chart visibility is window-aware:
 
 ## Windows Task Scheduler (Recommended)
 
-For internship-period automation, schedule the Supabase sync command at login or daily:
+For automation, schedule the Supabase sync command at login or daily:
 
 ```powershell
 poetry run python -m gitlab_stats.database.supabase_sync
