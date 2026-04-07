@@ -124,7 +124,8 @@ Primary runtime flags are in `gitlab_stats/config.py`:
 **Do users need to fork this repository?**
 
 - **No, not required.** A local user can clone this repository directly and run it.
-- **Forking is recommended** only if someone wants their own hosted/deployed copy (for example, Streamlit Community Cloud linked to their own GitHub account).
+- **Forking is recommended** only if someone wants their own hosted/deployed copy
+(for example, Streamlit Community Cloud linked to their own GitHub account).
 
 Use one of the two setup paths below.
 
@@ -139,26 +140,26 @@ git clone <repository-url>
 cd gitlab_stats
 ```
 
-2. Install Poetry and project dependencies:
+1. Install Poetry and project dependencies:
 
 ```powershell
 .\tools\install_poetry.bat
 .\tools\after_checkout.bat
 ```
 
-3. Add a `.env` file with GitLab API settings only:
+1. Add a `.env` file with GitLab API settings only:
 
 ```bash
 GITLAB_API_BASE_URL=https://<your-gitlab-host>/api/v4
 GITLAB_API_TOKEN=<your-gitlab-personal-access-token>
 ```
 
-4. Enable API mode in `gitlab_stats/config.py`:
+1. Enable API mode in `gitlab_stats/config.py`:
 
 - Set `USE_API = True`
 - Set `USE_SUPABASE = False`
 
-5. Start the dashboard:
+1. Start the dashboard:
 
 ```bash
 poetry run streamlit run gitlab_stats/dashboard.py
@@ -175,12 +176,12 @@ Use this when you want persistent synced data and a shareable hosted dashboard.
 - Clone is fine for local-only use.
 - Fork if you plan to deploy from your own GitHub repository.
 
-2. Create a Supabase project and capture:
+1. Create a Supabase project and capture:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
-3. Configure `.env` with both Supabase and API credentials:
+1. Configure `.env` with both Supabase and API credentials:
 
 ```bash
 SUPABASE_URL=https://<your-project>.supabase.co
@@ -189,24 +190,24 @@ GITLAB_API_BASE_URL=https://<your-gitlab-host>/api/v4
 GITLAB_API_TOKEN=<your-gitlab-personal-access-token>
 ```
 
-4. Configure `gitlab_stats/config.py` for Supabase-first mode:
+1. Configure `gitlab_stats/config.py` for Supabase-first mode:
 
 - Set `USE_SUPABASE = True`
 - Set `USE_API = True` (recommended fallback)
 
-5. Run an initial sync to populate Supabase:
+1. Run an initial sync to populate Supabase:
 
 ```bash
 poetry run python -m gitlab_stats.database.supabase_sync
 ```
 
-6. Run locally to validate:
+1. Run locally to validate:
 
 ```bash
 poetry run streamlit run gitlab_stats/dashboard.py
 ```
 
-7. Deploy (optional but typical for this path):
+1. Deploy (optional but typical for this path):
 
 - Streamlit Community Cloud: connect your fork/repo and set the same secrets in the app settings.
 - Any other host: provide the same environment variables in deployment config.
