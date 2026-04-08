@@ -559,6 +559,73 @@ def test_render_top_projects_shows_all_projects_without_slider_for_small_sets(
     ]
 
 
+def test_render_top_projects_shows_info_and_returns_for_empty_dataset(monkeypatch):
+    """Top projects should render an info message and return when no projects exist."""
+    # Arrange
+    calls = _install_streamlit_spy(monkeypatch)
+    metric_df = pd.DataFrame(
+        {
+            "total_contributions": [],
+            "code_contributions": [],
+            "collab_contributions": [],
+        },
+    )
+
+    # Act
+    sections.render_top_projects(metric_df)
+
+    # Assert
+    assert len(calls["infos"]) == 1
+    assert (
+        "No projects are available for top project analysis." in calls["infos"][0][0][0]
+    )
+    assert len(calls["slider"]) == 0
+    assert len(calls["plotly_chart"]) == 0
+
+
+def test_render_top_projects_uses_slider_for_more_than_three_projects(monkeypatch):
+    """Top projects should use the slider when project count exceeds the threshold."""
+    # Arrange
+    calls = _install_streamlit_spy(monkeypatch)
+    metric_df = pd.DataFrame(
+        {
+            "total_contributions": [16, 12, 8, 4],
+            "code_contributions": [12, 8, 6, 2],
+            "collab_contributions": [4, 4, 2, 2],
+        },
+        index=["project-a", "project-b", "project-c", "project-d"],
+    )
+    top_calls: list[int] = []
+
+    def _top_chart(df: pd.DataFrame, top_n: int):  # pylint: disable=unused-argument
+        top_calls.append(top_n)
+        return "top-figure"
+
+    def _style_chart(df: pd.DataFrame, top_n: int):  # pylint: disable=unused-argument
+        top_calls.append(top_n)
+        return "style-figure"
+
+    monkeypatch.setattr(sections, "build_top_projects_chart", _top_chart)
+    monkeypatch.setattr(sections, "build_contribution_style_chart", _style_chart)
+
+    # Act
+    sections.render_top_projects(metric_df)
+
+    # Assert
+    assert len(calls["slider"]) == 1
+    label, min_value, max_value, value, _ = calls["slider"][0]
+    assert label == "Number of projects to display"
+    assert min_value == 3
+    assert max_value == 4
+    assert value == 4
+    assert not any("Showing all" in call[0][0] for call in calls["captions"])
+    assert top_calls == [4, 4]
+    assert [call[0][0] for call in calls["plotly_chart"]] == [
+        "top-figure",
+        "style-figure",
+    ]
+
+
 def test_render_performance_tabs_renders_all_tab_charts(monkeypatch):
     """Performance tabs should emit four charts and read the heatmap checkbox."""
     # Arrange
