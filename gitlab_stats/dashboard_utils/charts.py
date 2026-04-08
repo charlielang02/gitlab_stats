@@ -393,5 +393,10 @@ def build_monthly_volume_chart(timeline_df):
         labels={"event_date": "Month", "total_contributions": "Contributions"},
         color_discrete_sequence=[ACCENT],
     )
+    fig.update_xaxes(
+        tickmode="array",
+        tickvals=monthly["event_date"],
+        tickformat="%b %Y",
+    )
     fig.update_layout(height=360)
     return fig

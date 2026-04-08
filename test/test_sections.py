@@ -60,6 +60,7 @@ def _install_streamlit_spy(monkeypatch):
         "writes": [],
         "warnings": [],
         "columns": [],
+        "slider": [],
     }
 
     def _record(name: str):
@@ -91,6 +92,11 @@ def _install_streamlit_spy(monkeypatch):
         """Record global Streamlit metric calls."""
         calls["metrics"].append((label, value))
 
+    def _slider(label: str, min_value: int, max_value: int, value: int, **kwargs):
+        """Record slider calls and return the provided default value."""
+        calls["slider"].append((label, min_value, max_value, value, kwargs))
+        return value
+
     monkeypatch.setattr(sections.st, "caption", _record("captions"))
     monkeypatch.setattr(sections.st, "checkbox", _checkbox)
     monkeypatch.setattr(sections.st, "dataframe", _record("dataframe"))
@@ -100,6 +106,7 @@ def _install_streamlit_spy(monkeypatch):
     monkeypatch.setattr(sections.st, "markdown", _record("markdown"))
     monkeypatch.setattr(sections.st, "metric", _metric)
     monkeypatch.setattr(sections.st, "plotly_chart", _record("plotly_chart"))
+    monkeypatch.setattr(sections.st, "slider", _slider)
     monkeypatch.setattr(sections.st, "subheader", _record("subheaders"))
     monkeypatch.setattr(sections.st, "tabs", _tabs)
     monkeypatch.setattr(sections.st, "write", _record("writes"))
@@ -509,6 +516,113 @@ def test_render_breakdown_tabs_renders_all_three_tab_views(monkeypatch):
         "type-figure",
         "box-figure",
         "scatter-figure",
+    ]
+
+
+def test_render_top_projects_shows_all_projects_without_slider_for_small_sets(
+    monkeypatch,
+):
+    """Top projects should avoid the slider when there are three or fewer projects."""
+    # Arrange
+    calls = _install_streamlit_spy(monkeypatch)
+    metric_df = pd.DataFrame(
+        {
+            "total_contributions": [16, 8, 4],
+            "code_contributions": [12, 6, 2],
+            "collab_contributions": [4, 2, 2],
+        },
+        index=["project-a", "project-b", "project-c"],
+    )
+    top_calls: list[int] = []
+
+    def _top_chart(df: pd.DataFrame, top_n: int):  # pylint: disable=unused-argument
+        top_calls.append(top_n)
+        return "top-figure"
+
+    def _style_chart(df: pd.DataFrame, top_n: int):  # pylint: disable=unused-argument
+        top_calls.append(top_n)
+        return "style-figure"
+
+    monkeypatch.setattr(sections, "build_top_projects_chart", _top_chart)
+    monkeypatch.setattr(sections, "build_contribution_style_chart", _style_chart)
+
+    # Act
+    sections.render_top_projects(metric_df)
+
+    # Assert
+    assert len(calls["slider"]) == 0
+    assert any("Showing all 3 projects." in call[0][0] for call in calls["captions"])
+    assert top_calls == [3, 3]
+    assert [call[0][0] for call in calls["plotly_chart"]] == [
+        "top-figure",
+        "style-figure",
+    ]
+
+
+def test_render_top_projects_shows_info_and_returns_for_empty_dataset(monkeypatch):
+    """Top projects should render an info message and return when no projects exist."""
+    # Arrange
+    calls = _install_streamlit_spy(monkeypatch)
+    metric_df = pd.DataFrame(
+        {
+            "total_contributions": [],
+            "code_contributions": [],
+            "collab_contributions": [],
+        },
+    )
+
+    # Act
+    sections.render_top_projects(metric_df)
+
+    # Assert
+    assert len(calls["infos"]) == 1
+    assert (
+        "No projects are available for top project analysis." in calls["infos"][0][0][0]
+    )
+    assert len(calls["slider"]) == 0
+    assert len(calls["plotly_chart"]) == 0
+
+
+def test_render_top_projects_uses_slider_for_more_than_three_projects(monkeypatch):
+    """Top projects should use the slider when project count exceeds the threshold."""
+    # Arrange
+    calls = _install_streamlit_spy(monkeypatch)
+    metric_df = pd.DataFrame(
+        {
+            "total_contributions": [16, 12, 8, 4],
+            "code_contributions": [12, 8, 6, 2],
+            "collab_contributions": [4, 4, 2, 2],
+        },
+        index=["project-a", "project-b", "project-c", "project-d"],
+    )
+    top_calls: list[int] = []
+
+    def _top_chart(df: pd.DataFrame, top_n: int):  # pylint: disable=unused-argument
+        top_calls.append(top_n)
+        return "top-figure"
+
+    def _style_chart(df: pd.DataFrame, top_n: int):  # pylint: disable=unused-argument
+        top_calls.append(top_n)
+        return "style-figure"
+
+    monkeypatch.setattr(sections, "build_top_projects_chart", _top_chart)
+    monkeypatch.setattr(sections, "build_contribution_style_chart", _style_chart)
+
+    # Act
+    sections.render_top_projects(metric_df)
+
+    # Assert
+    assert len(calls["slider"]) == 1
+    label, min_value, max_value, value, _ = calls["slider"][0]
+    assert label == "Number of projects to display"
+    assert min_value == 3
+    assert max_value == 4
+    assert value == 4
+    assert not any("Showing all" in call[0][0] for call in calls["captions"])
+    assert top_calls == [4, 4]
+    assert [call[0][0] for call in calls["plotly_chart"]] == [
+        "top-figure",
+        "style-figure",
     ]
 
 
