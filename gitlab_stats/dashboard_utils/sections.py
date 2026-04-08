@@ -29,6 +29,7 @@ from gitlab_stats.dashboard_utils.helpers import format_project_metrics_table
 BUSINESS_WEEKDAY_CUTOFF = 5
 MIN_DAYS_FOR_WEEKLY_MIX = 28
 MIN_DAYS_FOR_MONTHLY_VOLUME = 60
+MIN_SLIDER_PROJECT_THRESHOLD = 3
 
 try:
     import holidays as pyholidays
@@ -467,12 +468,21 @@ def render_top_projects(metric_df):
     st.markdown("---")
     st.header("🏆 Top Projects Analysis")
 
-    top_n = st.slider(
-        "Number of projects to display",
-        3,
-        len(metric_df),
-        min(10, len(metric_df)),
-    )
+    project_count = len(metric_df)
+    if project_count == 0:
+        st.info("No projects are available for top project analysis.")
+        return
+
+    if project_count <= MIN_SLIDER_PROJECT_THRESHOLD:
+        top_n = project_count
+        st.caption(f"Showing all {project_count} projects.")
+    else:
+        top_n = st.slider(
+            "Number of projects to display",
+            3,
+            project_count,
+            min(10, project_count),
+        )
 
     col_bars_1, col_bars_2 = st.columns(2)
 
