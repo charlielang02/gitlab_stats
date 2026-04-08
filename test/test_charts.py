@@ -368,3 +368,33 @@ def test_build_monthly_volume_chart_groups_by_month_start():
     trace = _trace(fig, 0)
     assert list(pd.to_datetime(trace.x).date) == [date(2026, 3, 1)]
     assert list(trace.y) == [6]
+
+
+def test_build_monthly_volume_chart_formats_monthly_axis():
+    """Monthly chart should always label the x-axis by whole months."""
+    # Arrange
+    timeline_df = pd.DataFrame(
+        {
+            "event_date": [
+                "2026-01-15",
+                "2026-02-10",
+                "2026-03-20",
+            ],
+            "total_contributions": [5, 7, 9],
+            "code_contributions": [3, 4, 5],
+            "collab_contributions": [2, 3, 4],
+        },
+    )
+
+    # Act
+    fig = charts.build_monthly_volume_chart(timeline_df)
+
+    # Assert
+    xaxis = _figure(fig).layout.xaxis
+    assert list(pd.to_datetime(xaxis.tickvals).date) == [
+        date(2026, 1, 1),
+        date(2026, 2, 1),
+        date(2026, 3, 1),
+    ]
+    assert xaxis.tickformat == "%b %Y"
+    assert xaxis.tickmode == "array"
