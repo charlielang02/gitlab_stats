@@ -109,3 +109,31 @@ def test_read_setting_returns_empty_for_falsy_secret(monkeypatch):
 
     # Assert
     assert result == ""
+
+
+def test_read_supabase_setting_prefers_dev_scoped_value(monkeypatch):
+    """SUPABASE_TARGET=dev should prefer SUPABASE_DEV_* values."""
+    # Arrange
+    monkeypatch.setenv("SUPABASE_TARGET", "dev")
+    monkeypatch.setenv("SUPABASE_DEV_URL", "https://dev.example.supabase.co")
+    monkeypatch.setenv("SUPABASE_URL", "https://prod.example.supabase.co")
+
+    # Act
+    result = settings.read_supabase_setting("SUPABASE_URL")
+
+    # Assert
+    assert result == "https://dev.example.supabase.co"
+
+
+def test_read_supabase_setting_falls_back_to_legacy_name(monkeypatch):
+    """When scoped key is missing, fallback should use legacy SUPABASE_* name."""
+    # Arrange
+    monkeypatch.setenv("SUPABASE_TARGET", "prod")
+    monkeypatch.delenv("SUPABASE_PROD_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "legacy-key")
+
+    # Act
+    result = settings.read_supabase_setting("SUPABASE_SERVICE_ROLE_KEY")
+
+    # Assert
+    assert result == "legacy-key"

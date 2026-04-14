@@ -16,7 +16,7 @@ from urllib.parse import urlencode
 from urllib.request import Request
 from urllib.request import urlopen
 
-from gitlab_stats.settings import read_setting
+from gitlab_stats.settings import read_supabase_setting
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class SupabaseRequestError(RuntimeError):
 
 def _supabase_rest_base_url() -> str:
     """Return Supabase REST API base URL."""
-    supabase_url = read_setting("SUPABASE_URL")
+    supabase_url = read_supabase_setting("SUPABASE_URL")
     if not supabase_url:
         raise SupabaseConfigError.missing_url()
 
@@ -85,7 +85,7 @@ def _supabase_rest_base_url() -> str:
 
 def _read_api_keys_for_select() -> list[str]:
     """Return service-role read key for server-side dashboard queries."""
-    key = read_setting("SUPABASE_SERVICE_ROLE_KEY")
+    key = read_supabase_setting("SUPABASE_SERVICE_ROLE_KEY")
     if not key:
         raise SupabaseConfigError.missing_read_key()
     return [key]
@@ -93,7 +93,7 @@ def _read_api_keys_for_select() -> list[str]:
 
 def _write_api_key() -> str:
     """Return service-role key for Supabase upserts."""
-    key = read_setting("SUPABASE_SERVICE_ROLE_KEY")
+    key = read_supabase_setting("SUPABASE_SERVICE_ROLE_KEY")
     if not key:
         raise SupabaseConfigError.missing_write_key()
 
@@ -265,8 +265,11 @@ def fetch_events_from_supabase(
     return response
 
 
-def upsert_events_to_supabase(event_records: list[dict[str, Any]]) -> int:
-    """Upsert event records into Supabase events table."""
+def _upsert_event_records_to_table(  # pylint: disable=too-many-locals
+    event_records: list[dict[str, Any]],
+    table_name: str,
+) -> int:
+    """Upsert normalized event records into a specific Supabase table."""
     if not event_records:
         return 0
 
@@ -303,7 +306,7 @@ def upsert_events_to_supabase(event_records: list[dict[str, Any]]) -> int:
         return 0
 
     conflict = quote("project,event_type,event_date", safe=",")
-    path = f"events?on_conflict={conflict}"
+    path = f"{table_name}?on_conflict={conflict}"
     batch_size = 500
     for batch in _chunked(payload, batch_size):
         _request_json(
@@ -314,5 +317,19 @@ def upsert_events_to_supabase(event_records: list[dict[str, Any]]) -> int:
             extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
         )
 
-    logger.info("Upserted %s event records to Supabase", len(payload))
+    logger.info(
+        "Upserted %s event records to Supabase table %s",
+        len(payload),
+        table_name,
+    )
     return len(payload)
+
+
+def upsert_events_to_supabase(event_records: list[dict[str, Any]]) -> int:
+    """Upsert GitLab event records into Supabase events table."""
+    return _upsert_event_records_to_table(event_records, "events")
+
+
+def upsert_jira_events_to_supabase(event_records: list[dict[str, Any]]) -> int:
+    """Upsert Jira event records into Supabase jira_events table."""
+    return _upsert_event_records_to_table(event_records, "jira_events")

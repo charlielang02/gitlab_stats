@@ -1,7 +1,6 @@
 """Generate a Streamlit dashboard to visualize GitLab contributions metrics."""
 
 import io
-import os
 from datetime import UTC
 from datetime import date
 from datetime import datetime
@@ -32,6 +31,8 @@ from gitlab_stats.dashboard_utils.sections import render_top_projects
 from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_api_with_time
 from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_supabase_with_time
 from gitlab_stats.gitlab_stats_api_ingester import fetch_supabase_date_bounds
+from gitlab_stats.settings import read_setting
+from gitlab_stats.settings import read_supabase_setting
 
 # Load environment variables from .env file if it exists
 load_dotenv()
@@ -546,10 +547,10 @@ def get_metrics():  # pylint: disable=too-many-locals
     """
     source_attempt_failed = not (config.USE_SUPABASE or config.USE_API)
 
-    supabase_url = os.getenv("SUPABASE_URL", "")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    api_base_url = os.getenv("GITLAB_API_BASE_URL", "")
-    api_token = os.getenv("GITLAB_API_TOKEN", "")
+    supabase_url = read_supabase_setting("SUPABASE_URL")
+    supabase_key = read_supabase_setting("SUPABASE_SERVICE_ROLE_KEY")
+    api_base_url = read_setting("GITLAB_API_BASE_URL")
+    api_token = read_setting("GITLAB_API_TOKEN")
 
     bounds_payload = _load_date_bounds_cached(
         {

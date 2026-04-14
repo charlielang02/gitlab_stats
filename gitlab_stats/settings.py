@@ -43,3 +43,26 @@ def read_setting(name: str) -> str:
         return ""
 
     return str(secret_value).strip() if secret_value else ""
+
+
+def _normalize_supabase_target(raw_target: str) -> str:
+    """Normalize Supabase target environment names."""
+    normalized = raw_target.strip().lower()
+    if normalized in {"", "prod", "production"}:
+        return "prod"
+    if normalized in {"dev", "development"}:
+        return "dev"
+    return "prod"
+
+
+def read_supabase_setting(name: str) -> str:
+    """Read target-scoped Supabase setting, then fallback to legacy name."""
+    target = _normalize_supabase_target(read_setting("SUPABASE_TARGET"))
+    prefix = "SUPABASE_DEV_" if target == "dev" else "SUPABASE_PROD_"
+    scoped_name = name.replace("SUPABASE_", prefix, 1)
+
+    scoped_value = read_setting(scoped_name)
+    if scoped_value:
+        return scoped_value
+
+    return read_setting(name)
