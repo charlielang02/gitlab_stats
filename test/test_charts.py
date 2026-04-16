@@ -398,3 +398,65 @@ def test_build_monthly_volume_chart_formats_monthly_axis():
     ]
     assert xaxis.tickformat == "%b %Y"
     assert xaxis.tickmode == "array"
+
+
+def _jira_timeline_df() -> pd.DataFrame:
+    """Create Jira timeline dataframe for chart tests."""
+    return pd.DataFrame(
+        {
+            "event_date": ["2026-03-03", "2026-03-01", "2026-03-02"],
+            "jira_issues_closed": [3, 1, 2],
+            "jira_comments": [6, 2, 4],
+            "jira_story_points_closed": [9, 3, 6],
+        },
+    )
+
+
+def test_build_jira_daily_closed_chart_adds_rolling_average():
+    """Closed-issues chart should sort dates and add a 7-day average trace."""
+    # Arrange
+    timeline_df = _jira_timeline_df()
+
+    # Act
+    fig = charts.build_jira_daily_closed_chart(timeline_df)
+
+    # Assert
+    traces = [_trace(fig, index) for index in range(2)]
+    assert list(pd.to_datetime(traces[0].x).date) == [
+        date(2026, 3, 1),
+        date(2026, 3, 2),
+        date(2026, 3, 3),
+    ]
+    assert list(traces[0].y) == [1, 2, 3]
+    assert list(traces[1].y) == [1.0, 1.5, 2.0]
+    assert traces[1].name == "7-Day Average"
+
+
+def test_build_jira_daily_comments_chart_adds_rolling_average():
+    """Comments chart should include daily values and a 7-day average trace."""
+    # Arrange
+    timeline_df = _jira_timeline_df()
+
+    # Act
+    fig = charts.build_jira_daily_comments_chart(timeline_df)
+
+    # Assert
+    traces = [_trace(fig, index) for index in range(2)]
+    assert list(traces[0].y) == [2, 4, 6]
+    assert list(traces[1].y) == [2.0, 3.0, 4.0]
+    assert traces[1].name == "7-Day Average"
+
+
+def test_build_jira_daily_story_points_chart_adds_rolling_average():
+    """Story points chart should include daily values and a 7-day average trace."""
+    # Arrange
+    timeline_df = _jira_timeline_df()
+
+    # Act
+    fig = charts.build_jira_daily_story_points_chart(timeline_df)
+
+    # Assert
+    traces = [_trace(fig, index) for index in range(2)]
+    assert list(traces[0].y) == [3, 6, 9]
+    assert list(traces[1].y) == [3.0, 4.5, 6.0]
+    assert traces[1].name == "7-Day Average"

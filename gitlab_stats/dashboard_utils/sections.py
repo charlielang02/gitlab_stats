@@ -669,25 +669,23 @@ def render_jira_analysis(  # pylint: disable=too-many-locals, too-many-statement
             st.caption(
                 f"Selected timeframe: {jira_timeline_meta.get('window_label', 'selected range')}",
             )
-            time_col1, time_col2, time_col3 = st.columns(3)
-            with time_col1:
-                st.subheader("Issues Closed")
-                st.plotly_chart(
-                    build_jira_daily_closed_chart(jira_timeline_df),
-                    width="stretch",
-                )
-            with time_col2:
-                st.subheader("Comments")
-                st.plotly_chart(
-                    build_jira_daily_comments_chart(jira_timeline_df),
-                    width="stretch",
-                )
-            with time_col3:
-                st.subheader("Story Points Closed")
-                st.plotly_chart(
-                    build_jira_daily_story_points_chart(jira_timeline_df),
-                    width="stretch",
-                )
+            st.subheader("Issues Closed")
+            st.plotly_chart(
+                build_jira_daily_closed_chart(jira_timeline_df),
+                width="stretch",
+            )
+
+            st.subheader("Comments")
+            st.plotly_chart(
+                build_jira_daily_comments_chart(jira_timeline_df),
+                width="stretch",
+            )
+
+            st.subheader("Story Points Closed")
+            st.plotly_chart(
+                build_jira_daily_story_points_chart(jira_timeline_df),
+                width="stretch",
+            )
 
     with tabs[2]:
         selected_project = st.selectbox(

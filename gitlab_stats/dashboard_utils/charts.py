@@ -320,21 +320,38 @@ def build_project_activity_bar(project_data):
 
 def build_daily_activity_trend(timeline_df):
     """Build daily activity line chart with 7-day moving average."""
+    return _build_daily_trend_chart(
+        timeline_df,
+        metric_key="total_contributions",
+        metric_label="Daily Total",
+        metric_color=PRIMARY,
+        y_axis_title="Contributions",
+        height=380,
+    )
+
+
+def _build_daily_trend_chart(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    timeline_df,
+    metric_key,
+    metric_label,
+    metric_color,
+    y_axis_title,
+    height=340,
+):
+    """Build daily metric trend chart with a 7-day rolling average."""
     timeline = timeline_df.copy()
     timeline["event_date"] = pd.to_datetime(timeline["event_date"])
     timeline = timeline.sort_values("event_date")
-    timeline["rolling_7d"] = (
-        timeline["total_contributions"].rolling(7, min_periods=1).mean()
-    )
+    timeline["rolling_7d"] = timeline[metric_key].rolling(7, min_periods=1).mean()
 
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
             x=timeline["event_date"],
-            y=timeline["total_contributions"],
+            y=timeline[metric_key],
             mode="lines",
-            name="Daily Total",
-            line={"color": PRIMARY, "width": 2},
+            name=metric_label,
+            line={"color": metric_color, "width": 2},
         ),
     )
     fig.add_trace(
@@ -346,7 +363,7 @@ def build_daily_activity_trend(timeline_df):
             line={"color": SECONDARY, "width": 2, "dash": "dash"},
         ),
     )
-    fig.update_layout(height=380, xaxis_title="Date", yaxis_title="Contributions")
+    fig.update_layout(height=height, xaxis_title="Date", yaxis_title=y_axis_title)
     return fig
 
 
@@ -470,53 +487,49 @@ def build_jira_project_details_bar(project_data):
 
 def build_jira_daily_closed_chart(timeline_df):
     """Build Jira daily closed issues time series chart."""
-    timeline = timeline_df.copy()
-    timeline["event_date"] = pd.to_datetime(timeline["event_date"])
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=timeline["event_date"],
-            y=timeline["jira_issues_closed"],
-            mode="lines",
-            name="Issues Closed",
-            line={"color": SECONDARY, "width": 2},
-        ),
+    return _build_jira_daily_trend_chart(
+        timeline_df,
+        metric_key="jira_issues_closed",
+        metric_label="Issues Closed",
+        metric_color=PRIMARY,
+        y_axis_title="Closed Issues",
     )
-    fig.update_layout(height=340, xaxis_title="Date", yaxis_title="Closed Issues")
-    return fig
 
 
 def build_jira_daily_comments_chart(timeline_df):
     """Build Jira daily comment activity time series chart."""
-    timeline = timeline_df.copy()
-    timeline["event_date"] = pd.to_datetime(timeline["event_date"])
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=timeline["event_date"],
-            y=timeline["jira_comments"],
-            mode="lines",
-            name="Comments",
-            line={"color": ACCENT, "width": 2},
-        ),
+    return _build_jira_daily_trend_chart(
+        timeline_df,
+        metric_key="jira_comments",
+        metric_label="Comments",
+        metric_color=ACCENT,
+        y_axis_title="Comments",
     )
-    fig.update_layout(height=340, xaxis_title="Date", yaxis_title="Comments")
-    return fig
 
 
 def build_jira_daily_story_points_chart(timeline_df):
     """Build Jira daily story points closed time series chart."""
-    timeline = timeline_df.copy()
-    timeline["event_date"] = pd.to_datetime(timeline["event_date"])
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=timeline["event_date"],
-            y=timeline["jira_story_points_closed"],
-            mode="lines",
-            name="Story Points Closed",
-            line={"color": PRIMARY, "width": 2},
-        ),
+    return _build_jira_daily_trend_chart(
+        timeline_df,
+        metric_key="jira_story_points_closed",
+        metric_label="Story Points Closed",
+        metric_color=HIGHLIGHT,
+        y_axis_title="Story Points",
     )
-    fig.update_layout(height=340, xaxis_title="Date", yaxis_title="Story Points")
-    return fig
+
+
+def _build_jira_daily_trend_chart(
+    timeline_df,
+    metric_key,
+    metric_label,
+    metric_color,
+    y_axis_title,
+):
+    """Build Jira daily metric chart with 7-day rolling average."""
+    return _build_daily_trend_chart(
+        timeline_df,
+        metric_key=metric_key,
+        metric_label=metric_label,
+        metric_color=metric_color,
+        y_axis_title=y_axis_title,
+    )
