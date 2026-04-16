@@ -620,13 +620,26 @@ def render_jira_analysis(  # pylint: disable=too-many-locals, too-many-statement
     tabs = st.tabs(["Project Overview", "Time Series", "Project Deep Dive"])
 
     with tabs[0]:
+        project_count = len(jira_metric_df)
+        if project_count <= MIN_SLIDER_PROJECT_THRESHOLD:
+            top_n = project_count
+            st.caption(f"Showing all {project_count} Jira projects.")
+        else:
+            top_n = st.slider(
+                "Number of Jira projects to display",
+                3,
+                project_count,
+                min(10, project_count),
+                key="jira_top_projects_count",
+            )
+
         project_col1, project_col2 = st.columns(2)
         with project_col1:
             st.subheader("📌 Issues Closed by Project")
             st.plotly_chart(
                 build_jira_top_projects_chart(
                     jira_metric_df,
-                    min(10, len(jira_metric_df)),
+                    top_n,
                     "jira_issues_closed",
                     "Top Jira Projects by Closed Issues",
                     "Closed Issues",
@@ -638,7 +651,7 @@ def render_jira_analysis(  # pylint: disable=too-many-locals, too-many-statement
             st.plotly_chart(
                 build_jira_top_projects_chart(
                     jira_metric_df,
-                    min(10, len(jira_metric_df)),
+                    top_n,
                     "jira_story_points_closed",
                     "Top Jira Projects by Story Points Closed",
                     "Story Points",
