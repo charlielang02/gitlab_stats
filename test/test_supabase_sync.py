@@ -6,6 +6,8 @@ import pytest
 
 from gitlab_stats.database import supabase_sync
 
+# pylint: disable=protected-access
+
 
 def test_run_sync_returns_one_when_api_fetch_fails(monkeypatch):
     """Return non-zero exit code when API event fetch fails."""

@@ -1,6 +1,6 @@
 Report
 ======
-1666 statements analysed.
+1905 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -14,7 +14,7 @@ Statistics by type
 +---------+-------+------------+---------+
 |method   |6      |100.00      |0.00     |
 +---------+-------+------------+---------+
-|function |126    |100.00      |0.00     |
+|function |143    |100.00      |0.00     |
 +---------+-------+------------+---------+
 
 
@@ -30,16 +30,16 @@ gitlab_stats
 | \-activity_rules (gitlab_stats.gitlab_stats_api_ingester)
 | \-charts (gitlab_stats.dashboard_utils.sections)
 | \-helpers (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.sections)
-| \-metrics_schema (gitlab_stats.dashboard_utils.timeline_utils,gitlab_stats.gitlab_stats_api_ingester)
-| \-timeline_utils (gitlab_stats.gitlab_stats_api_ingester)
+| \-metrics_schema (gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.dashboard_utils.timeline_utils,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
+| \-timeline_utils (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
 \-database
-| \-supabase_client (gitlab_stats.database.supabase_sync,gitlab_stats.gitlab_stats_api_ingester)
+| \-supabase_client (gitlab_stats.database.supabase_sync,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
 \-gitlab_stats_api_ingester (gitlab_stats.dashboard,gitlab_stats.database.supabase_sync)
-\-jira_api_ingester (gitlab_stats.database.supabase_sync)
+\-jira_api_ingester (gitlab_stats.dashboard,gitlab_stats.database.supabase_sync)
 \-settings (gitlab_stats.dashboard,gitlab_stats.database.supabase_client,gitlab_stats.database.supabase_sync,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
 holidays (gitlab_stats.dashboard_utils.sections)
 numpy (gitlab_stats.dashboard_utils.charts)
-pandas (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.dashboard_utils.timeline_utils)
+pandas (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.dashboard_utils.timeline_utils,gitlab_stats.jira_api_ingester)
 plotly
 \-express (gitlab_stats.dashboard_utils.charts)
 \-graph_objects (gitlab_stats.dashboard_utils.charts)
@@ -48,7 +48,7 @@ streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_st
 
 
 
-3707 lines have been analyzed
+4287 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -56,13 +56,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |2630   |70.95 |
+|code      |3087   |72.01 |
 +----------+-------+------+
-|docstring |450    |12.14 |
+|docstring |501    |11.69 |
 +----------+-------+------+
-|comment   |16     |0.43  |
+|comment   |16     |0.37  |
 +----------+-------+------+
-|empty     |611    |16.48 |
+|empty     |683    |15.93 |
 +----------+-------+------+
 
 

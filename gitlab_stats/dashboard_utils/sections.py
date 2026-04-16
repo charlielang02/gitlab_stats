@@ -14,6 +14,12 @@ from gitlab_stats.dashboard_utils.charts import build_comparison_chart
 from gitlab_stats.dashboard_utils.charts import build_contribution_style_chart
 from gitlab_stats.dashboard_utils.charts import build_daily_activity_trend
 from gitlab_stats.dashboard_utils.charts import build_distribution_box
+from gitlab_stats.dashboard_utils.charts import build_jira_activity_chart
+from gitlab_stats.dashboard_utils.charts import build_jira_daily_closed_chart
+from gitlab_stats.dashboard_utils.charts import build_jira_daily_comments_chart
+from gitlab_stats.dashboard_utils.charts import build_jira_daily_story_points_chart
+from gitlab_stats.dashboard_utils.charts import build_jira_project_details_bar
+from gitlab_stats.dashboard_utils.charts import build_jira_top_projects_chart
 from gitlab_stats.dashboard_utils.charts import build_monthly_volume_chart
 from gitlab_stats.dashboard_utils.charts import build_mr_activity_chart
 from gitlab_stats.dashboard_utils.charts import build_pareto_chart
@@ -25,6 +31,7 @@ from gitlab_stats.dashboard_utils.charts import build_weekly_mix_chart
 from gitlab_stats.dashboard_utils.helpers import SECONDARY
 from gitlab_stats.dashboard_utils.helpers import compute_profile_summary
 from gitlab_stats.dashboard_utils.helpers import format_project_metrics_table
+from gitlab_stats.dashboard_utils.metrics_schema import JIRA_METRIC_KEYS
 
 BUSINESS_WEEKDAY_CUTOFF = 5
 MIN_DAYS_FOR_WEEKLY_MIX = 28
@@ -221,7 +228,11 @@ def render_behavior_analysis(timeline_df, timeline_meta):
             st.caption("Hidden for windows shorter than 2 months.")
 
 
-def render_executive_summary(metric_df, total_metrics):
+def render_executive_summary(  # pylint: disable=too-many-locals
+    metric_df,
+    total_metrics,
+    jira_total_metrics=None,
+):
     """Render top-level KPI summary cards and averages."""
     st.header("📈 Executive Summary")
 
@@ -247,6 +258,44 @@ def render_executive_summary(metric_df, total_metrics):
     with summary_col3:
         code_pct = total_metrics.get("code_pct", 0)
         st.metric("Code vs Collab", f"{code_pct:.1f}% Code")
+
+    if jira_total_metrics is None:
+        return
+
+    st.markdown("---")
+    st.subheader("🧩 Jira Snapshot")
+
+    jira_col1, jira_col2, jira_col3 = st.columns(3)
+    jira_col4, jira_col5, jira_col6 = st.columns(3)
+
+    with jira_col1:
+        st.metric(
+            "Jira Projects Touched",
+            int(jira_total_metrics.get("projects_touched", 0)),
+        )
+    with jira_col2:
+        st.metric(
+            "Jira Issues Assigned",
+            int(jira_total_metrics.get("jira_issues_assigned", 0)),
+        )
+    with jira_col3:
+        st.metric(
+            "Jira Issues Closed",
+            int(jira_total_metrics.get("jira_issues_closed", 0)),
+        )
+
+    with jira_col4:
+        st.metric("Jira Comments", int(jira_total_metrics.get("jira_comments", 0)))
+    with jira_col5:
+        st.metric(
+            "Story Points Closed",
+            int(jira_total_metrics.get("jira_story_points_closed", 0)),
+        )
+    with jira_col6:
+        st.metric(
+            "Total Jira Activity",
+            int(jira_total_metrics.get("total_jira_activity", 0)),
+        )
 
 
 def render_profile(metric_df, total_metrics):
@@ -553,6 +602,120 @@ def _render_project_activity_charts(project_data):
     with chart_col2:
         fig_project_bar = build_project_activity_bar(project_data)
         st.plotly_chart(fig_project_bar, width="stretch")
+
+
+def render_jira_analysis(  # pylint: disable=too-many-locals, too-many-statements
+    jira_metric_df,
+    jira_timeline_df,
+    jira_timeline_meta,
+):
+    """Render Jira-specific project and time-series analytics."""
+    st.markdown("---")
+    st.header("🧩 Jira Charts")
+
+    if jira_metric_df is None or jira_metric_df.empty:
+        st.info("No Jira data is available for the selected timeframe.")
+        return
+
+    tabs = st.tabs(["Project Overview", "Time Series", "Project Deep Dive"])
+
+    with tabs[0]:
+        project_col1, project_col2 = st.columns(2)
+        with project_col1:
+            st.subheader("📌 Issues Closed by Project")
+            st.plotly_chart(
+                build_jira_top_projects_chart(
+                    jira_metric_df,
+                    min(10, len(jira_metric_df)),
+                    "jira_issues_closed",
+                    "Top Jira Projects by Closed Issues",
+                    "Closed Issues",
+                ),
+                width="stretch",
+            )
+        with project_col2:
+            st.subheader("🏷 Story Points Closed by Project")
+            st.plotly_chart(
+                build_jira_top_projects_chart(
+                    jira_metric_df,
+                    min(10, len(jira_metric_df)),
+                    "jira_story_points_closed",
+                    "Top Jira Projects by Story Points Closed",
+                    "Story Points",
+                ),
+                width="stretch",
+            )
+
+        st.subheader("📊 Jira Activity by Project")
+        st.plotly_chart(build_jira_activity_chart(jira_metric_df), width="stretch")
+
+    with tabs[1]:
+        if jira_timeline_df is None or jira_timeline_df.empty:
+            st.info("No Jira time-series data is available for the selected timeframe.")
+        else:
+            st.caption(
+                f"Selected timeframe: {jira_timeline_meta.get('window_label', 'selected range')}",
+            )
+            time_col1, time_col2, time_col3 = st.columns(3)
+            with time_col1:
+                st.subheader("Issues Closed")
+                st.plotly_chart(
+                    build_jira_daily_closed_chart(jira_timeline_df),
+                    width="stretch",
+                )
+            with time_col2:
+                st.subheader("Comments")
+                st.plotly_chart(
+                    build_jira_daily_comments_chart(jira_timeline_df),
+                    width="stretch",
+                )
+            with time_col3:
+                st.subheader("Story Points Closed")
+                st.plotly_chart(
+                    build_jira_daily_story_points_chart(jira_timeline_df),
+                    width="stretch",
+                )
+
+    with tabs[2]:
+        selected_project = st.selectbox(
+            "Select Jira Project",
+            jira_metric_df.index,
+            key="jira_project_select",
+        )
+        if not selected_project:
+            return
+
+        project_data = jira_metric_df.loc[selected_project]
+        st.subheader(f"📍 {selected_project}")
+        metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
+        with metrics_col1:
+            st.metric("Issues Assigned", int(project_data["jira_issues_assigned"]))
+        with metrics_col2:
+            st.metric("Issues Closed", int(project_data["jira_issues_closed"]))
+        with metrics_col3:
+            st.metric("Comments", int(project_data["jira_comments"]))
+
+        extra_col1, extra_col2 = st.columns(2)
+        with extra_col1:
+            st.metric(
+                "Story Points Closed",
+                int(project_data["jira_story_points_closed"]),
+            )
+        with extra_col2:
+            st.metric("Total Jira Activity", int(project_data["total_jira_activity"]))
+
+        st.subheader("📈 Jira Project Breakdown")
+        metrics_html = format_project_metrics_table(
+            project_data,
+            [
+                *JIRA_METRIC_KEYS,
+                "total_jira_activity",
+            ],
+        )
+        st.markdown(metrics_html, unsafe_allow_html=True)
+
+        st.subheader("📊 Activity Details")
+        st.plotly_chart(build_jira_project_details_bar(project_data), width="stretch")
 
 
 def render_export(metric_df):

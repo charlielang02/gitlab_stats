@@ -9,6 +9,7 @@ from datetime import UTC
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
+from typing import TYPE_CHECKING
 from typing import Any
 from urllib.error import HTTPError
 from urllib.error import URLError
@@ -19,7 +20,15 @@ from urllib.request import Request
 from urllib.request import urlopen
 
 from gitlab_stats import config
+from gitlab_stats.dashboard_utils.metrics_schema import JIRA_METRIC_KEYS
+from gitlab_stats.dashboard_utils.timeline_utils import build_event_type_timeline
+from gitlab_stats.database.supabase_client import SupabaseConfigError
+from gitlab_stats.database.supabase_client import SupabaseRequestError
+from gitlab_stats.database.supabase_client import fetch_jira_events_from_supabase
 from gitlab_stats.settings import read_setting
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +231,82 @@ def _append_count(
     counters[key] += count
 
 
+def _build_jira_metrics_from_rows(  # pylint: disable=too-many-locals
+    rows: list[dict[str, Any]],
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> tuple[
+    dict[str, dict[str, Any]],
+    dict[str, Any],
+    pd.DataFrame,
+    dict[str, bool | int | str],
+]:
+    metrics: dict[str, dict[str, Any]] = defaultdict(lambda: defaultdict(int))
+    event_records: list[dict[str, Any]] = []
+
+    for row in rows:
+        project_name = str(row.get("project", "")).strip()
+        event_type = str(row.get("event_type", "")).strip()
+        count = _to_int(row.get("count", 0))
+        if not project_name or event_type not in JIRA_METRIC_KEYS or count <= 0:
+            continue
+
+        project_data = metrics[project_name]
+        project_data[event_type] += count
+
+        raw_date = row.get("event_date")
+        event_date = None
+        if raw_date:
+            try:
+                event_date = date.fromisoformat(str(raw_date))
+            except ValueError:
+                event_date = None
+
+        event_records.append(
+            {
+                "event_date": event_date,
+                "project": project_name,
+                "event_type": event_type,
+                "count": count,
+            },
+        )
+
+    non_zero_metrics: dict[str, dict[str, Any]] = {}
+    total_metrics: dict[str, Any] = defaultdict(int)
+    for project_name, project_data in metrics.items():
+        project_total = sum(
+            _to_int(project_data.get(key, 0)) for key in JIRA_METRIC_KEYS
+        )
+        project_data["total_jira_activity"] = project_total
+        if project_total > 0:
+            non_zero_metrics[project_name] = project_data
+            for key in JIRA_METRIC_KEYS:
+                total_metrics[key] += _to_int(project_data.get(key, 0))
+
+    total_metrics["total_jira_activity"] = sum(
+        _to_int(total_metrics.get(key, 0)) for key in JIRA_METRIC_KEYS
+    )
+    total_metrics["projects_touched"] = len(non_zero_metrics)
+
+    timeline_df, timeline_meta = build_event_type_timeline(
+        event_records,
+        list(JIRA_METRIC_KEYS),
+        period_start=period_start,
+        period_end=period_end,
+    )
+    if not timeline_df.empty:
+        timeline_df["total_jira_activity"] = timeline_df[list(JIRA_METRIC_KEYS)].sum(
+            axis=1,
+        )
+
+    return (
+        {project: dict(data) for project, data in non_zero_metrics.items()},
+        dict(total_metrics),
+        timeline_df,
+        timeline_meta,
+    )
+
+
 def _extract_project_key(fields: dict[str, Any]) -> str:
     """Extract project key from Jira issue fields."""
     project_obj = fields.get("project", {})
@@ -390,3 +475,55 @@ def fetch_event_records_from_jira(  # pylint: disable=too-many-locals
         return records
 
     return None
+
+
+def fetch_jira_metrics_from_supabase_with_time(
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> (
+    tuple[dict[str, Any], dict[str, Any], pd.DataFrame, dict[str, bool | int | str]]
+    | None
+):
+    """Fetch Jira metrics from Supabase event rows and rebuild a Jira timeline."""
+    try:
+        lookback_days = max(1, _to_int(getattr(config, "SUPABASE_LOOKBACK_DAYS", 365)))
+        query_end = datetime.now(tz=UTC).date() if period_end is None else period_end
+        query_start = (
+            query_end - timedelta(days=lookback_days - 1)
+            if period_start is None
+            else period_start
+        )
+        if query_start > query_end:
+            query_start, query_end = query_end, query_start
+
+        rows = fetch_jira_events_from_supabase(
+            lookback_days=lookback_days,
+            period_start=query_start,
+            period_end=query_end,
+        )
+        if not rows:
+            logger.warning("No Supabase Jira event rows found for configured window")
+            return None
+
+        metrics, total_metrics, timeline_df, timeline_meta = (
+            _build_jira_metrics_from_rows(
+                rows,
+                period_start=query_start,
+                period_end=query_end,
+            )
+        )
+        if not metrics:
+            return None
+
+        timeline_meta["source"] = "supabase"
+        logger.info(
+            "Loaded Jira metrics for %s project(s) across %s event row(s)",
+            len(metrics),
+            len(rows),
+        )
+
+    except (SupabaseConfigError, SupabaseRequestError, ValueError, TypeError, KeyError):
+        logger.exception("Failed to parse Supabase Jira event response")
+        return None
+
+    return metrics, total_metrics, timeline_df, timeline_meta

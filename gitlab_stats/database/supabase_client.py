@@ -171,16 +171,26 @@ def _parse_iso_date(raw_value: Any) -> date | None:
 
 def fetch_event_date_bounds_from_supabase() -> tuple[date, date] | None:
     """Fetch earliest and latest event dates using lightweight limit queries."""
+    return fetch_event_date_bounds_from_table("events")
+
+
+def fetch_jira_event_date_bounds_from_supabase() -> tuple[date, date] | None:
+    """Fetch earliest and latest Jira event dates using lightweight limit queries."""
+    return fetch_event_date_bounds_from_table("jira_events")
+
+
+def fetch_event_date_bounds_from_table(table_name: str) -> tuple[date, date] | None:
+    """Fetch earliest and latest event dates for a specific table."""
     read_keys = _read_api_keys_for_select()
 
-    oldest_path = "events?" + urlencode(
+    oldest_path = f"{table_name}?" + urlencode(
         {
             "select": "event_date",
             "order": "event_date.asc",
             "limit": 1,
         },
     )
-    newest_path = "events?" + urlencode(
+    newest_path = f"{table_name}?" + urlencode(
         {
             "select": "event_date",
             "order": "event_date.desc",
@@ -221,6 +231,35 @@ def fetch_events_from_supabase(
     period_end: date | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch event rows from Supabase for the dashboard timeline window."""
+    return fetch_events_from_table(
+        "events",
+        lookback_days=lookback_days,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+
+def fetch_jira_events_from_supabase(
+    lookback_days: int,
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch Jira event rows from Supabase for the dashboard timeline window."""
+    return fetch_events_from_table(
+        "jira_events",
+        lookback_days=lookback_days,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+
+def fetch_events_from_table(
+    table_name: str,
+    lookback_days: int,
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch event rows from a specific Supabase table for the dashboard window."""
     lookback_days = max(lookback_days, 1)
 
     read_keys = _read_api_keys_for_select()
@@ -243,7 +282,7 @@ def fetch_events_from_supabase(
             ),
         },
     )
-    path = f"events?{query}"
+    path = f"{table_name}?{query}"
     last_error: SupabaseRequestError | None = None
     response: list[dict[str, Any]] | dict[str, Any] | None = None
     for read_key in read_keys:

@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from gitlab_stats import config
 from gitlab_stats.dashboard_utils.helpers import ORDERED_CATEGORIES
 from gitlab_stats.dashboard_utils.helpers import inject_dashboard_styles
+from gitlab_stats.dashboard_utils.helpers import prepare_jira_metric_df
 from gitlab_stats.dashboard_utils.helpers import prepare_metric_df
 from gitlab_stats.dashboard_utils.helpers import render_main_header
 from gitlab_stats.dashboard_utils.metrics_schema import BASE_METRIC_KEYS
@@ -23,6 +24,7 @@ from gitlab_stats.dashboard_utils.sections import render_breakdown_tabs
 from gitlab_stats.dashboard_utils.sections import render_contribution_distribution
 from gitlab_stats.dashboard_utils.sections import render_executive_summary
 from gitlab_stats.dashboard_utils.sections import render_export_with_timeline
+from gitlab_stats.dashboard_utils.sections import render_jira_analysis
 from gitlab_stats.dashboard_utils.sections import render_key_insights
 from gitlab_stats.dashboard_utils.sections import render_performance_tabs
 from gitlab_stats.dashboard_utils.sections import render_profile
@@ -31,6 +33,7 @@ from gitlab_stats.dashboard_utils.sections import render_top_projects
 from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_api_with_time
 from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_supabase_with_time
 from gitlab_stats.gitlab_stats_api_ingester import fetch_supabase_date_bounds
+from gitlab_stats.jira_api_ingester import fetch_jira_metrics_from_supabase_with_time
 from gitlab_stats.settings import read_setting
 from gitlab_stats.settings import read_supabase_setting
 
@@ -528,6 +531,28 @@ def _load_metrics_cached(
     return None
 
 
+@st.cache_data(show_spinner=False, ttl=CACHE_TTL_SECONDS)
+def _load_jira_metrics_cached(request: dict[str, object]):
+    """Load Jira metrics from Supabase with cache keyed by timeframe and config."""
+    use_supabase = bool(request.get("use_supabase", False))
+    supabase_url = str(request.get("supabase_url", "")).strip()
+    supabase_key = str(request.get("supabase_key", "")).strip()
+    if use_supabase and supabase_url and supabase_key:
+        result = fetch_jira_metrics_from_supabase_with_time(
+            period_start=_parse_iso_date(str(request.get("period_start", ""))),
+            period_end=_parse_iso_date(str(request.get("period_end", ""))),
+        )
+        if result is not None:
+            metrics, totals, timeline_df, timeline_meta = result
+            normalized_metrics, normalized_totals = _normalize_metrics_for_cache(
+                metrics,
+                totals,
+            )
+            return normalized_metrics, normalized_totals, timeline_df, timeline_meta
+
+    return None
+
+
 def configure_page():
     """Configure Streamlit page and shared visual styles."""
     st.set_page_config(
@@ -675,7 +700,34 @@ def main():
     metrics, total_metrics, timeline_df, timeline_meta = result
     metric_df, ordered_columns = prepare_metric_df(metrics)
 
-    render_executive_summary(metric_df, total_metrics)
+    jira_result = None
+    jira_metric_df = None
+    jira_timeline_df = None
+    jira_timeline_meta = None
+    jira_total_metrics = None
+    selected_period_start = _parse_iso_date(
+        timeline_meta.get("requested_period_start"),
+    )
+    selected_period_end = _parse_iso_date(timeline_meta.get("requested_period_end"))
+
+    if config.USE_SUPABASE and selected_period_start and selected_period_end:
+        jira_result = _load_jira_metrics_cached(
+            {
+                "use_supabase": True,
+                "supabase_url": read_supabase_setting("SUPABASE_URL"),
+                "supabase_key": read_supabase_setting("SUPABASE_SERVICE_ROLE_KEY"),
+                "period_start": selected_period_start.isoformat(),
+                "period_end": selected_period_end.isoformat(),
+            },
+        )
+
+    if jira_result is not None:
+        jira_metrics, jira_total_metrics, jira_timeline_df, jira_timeline_meta = (
+            jira_result
+        )
+        jira_metric_df, _ = prepare_jira_metric_df(jira_metrics)
+
+    render_executive_summary(metric_df, total_metrics, jira_total_metrics)
     render_profile(metric_df, total_metrics)
     render_behavior_analysis(timeline_df, timeline_meta)
     render_key_insights(metric_df, total_metrics)
@@ -684,6 +736,12 @@ def main():
     render_performance_tabs(metric_df)
     render_top_projects(metric_df)
     render_project_deep_dive(metric_df, ordered_columns)
+    if (
+        jira_metric_df is not None
+        and jira_timeline_df is not None
+        and jira_timeline_meta is not None
+    ):
+        render_jira_analysis(jira_metric_df, jira_timeline_df, jira_timeline_meta)
     render_export_with_timeline(metric_df, timeline_df)
 
 
