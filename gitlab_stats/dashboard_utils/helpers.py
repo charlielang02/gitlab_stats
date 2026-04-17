@@ -5,6 +5,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from gitlab_stats.dashboard_utils.metrics_schema import JIRA_METRIC_KEYS
+
 PRIMARY = "#0B3954"
 SECONDARY = "#A11692"
 ACCENT = "#58BC82"
@@ -139,6 +141,21 @@ def prepare_metric_df(metrics):
     ]
     metric_df = metric_df[ordered_columns + remaining_columns]
     metric_df = metric_df.sort_values(by="total_contributions", ascending=False)
+    return metric_df, ordered_columns
+
+
+def prepare_jira_metric_df(metrics):
+    """Build ordered Jira metrics dataframe from parsed metrics dictionary."""
+    metric_df = pd.DataFrame.from_dict(metrics, orient="index").fillna(0)
+    ordered_columns = [
+        column for column in JIRA_METRIC_KEYS if column in metric_df.columns
+    ]
+    remaining_columns = [
+        column for column in metric_df.columns if column not in ordered_columns
+    ]
+    metric_df = metric_df[ordered_columns + remaining_columns]
+    if "jira_issues_closed" in metric_df.columns:
+        metric_df = metric_df.sort_values(by="jira_issues_closed", ascending=False)
     return metric_df, ordered_columns
 
 

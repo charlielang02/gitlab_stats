@@ -33,7 +33,11 @@ def patch_settings(
     key: str | None = "dummy-key",
 ):
     """Patch supabase settings reader for deterministic tests."""
-    monkeypatch.setattr(supabase_client, "read_setting", DummySettings(url, key))
+    monkeypatch.setattr(
+        supabase_client,
+        "read_supabase_setting",
+        DummySettings(url, key),
+    )
 
 
 def test_missing_url(monkeypatch):
@@ -441,3 +445,36 @@ def test_upsert_events_to_supabase_returns_zero_without_valid_payload(monkeypatc
 
     # Assert
     assert inserted == 0
+
+
+def test_upsert_jira_events_to_supabase_uses_jira_table(monkeypatch):
+    """Jira upsert should target the jira_events table."""
+    # Arrange
+    monkeypatch.setattr(supabase_client, "_write_api_key", lambda: "write-key")
+    captured_paths = []
+
+    def _fake_request_json(method, path, _api_key, payload=None, extra_headers=None):
+        """Capture path used for Jira POST upsert requests."""
+        captured_paths.append(path)
+        assert method == "POST"
+        assert payload is not None
+        assert extra_headers is not None
+
+    monkeypatch.setattr(supabase_client, "_request_json", _fake_request_json)
+
+    records = [
+        {
+            "event_date": "2026-03-01",
+            "project": "PROJ",
+            "event_type": "jira_issues_closed",
+            "count": 2,
+        },
+    ]
+
+    # Act
+    inserted = supabase_client.upsert_jira_events_to_supabase(records)
+
+    # Assert
+    assert inserted == 1
+    assert len(captured_paths) == 1
+    assert captured_paths[0].startswith("jira_events?on_conflict=")

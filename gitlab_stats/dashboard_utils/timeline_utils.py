@@ -23,13 +23,18 @@ def _empty_timeline_frame() -> pd.DataFrame:
     return pd.DataFrame(columns=columns)
 
 
-def build_timeline(
+def _empty_event_timeline_frame(event_keys: list[str]) -> pd.DataFrame:
+    columns = ["event_date", *event_keys]
+    return pd.DataFrame(columns=columns)
+
+
+def build_event_type_timeline(
     event_records: list[dict[str, object]],
-    has_real_dates: bool,
+    event_keys: list[str],
     period_start: date | None = None,
     period_end: date | None = None,
 ) -> tuple[pd.DataFrame, dict[str, bool | int | str]]:
-    """Build daily timeline aggregates from normalized event records."""
+    """Build a daily timeline for arbitrary event types."""
     meta: dict[str, bool | int | str] = {
         "has_real_dates": False,
         "using_synthetic_timeline": False,
@@ -44,26 +49,22 @@ def build_timeline(
         meta["expected_days"] = (period_end - period_start).days + 1
 
     if not event_records:
-        return _empty_timeline_frame(), meta
+        return _empty_event_timeline_frame(event_keys), meta
 
     records = pd.DataFrame(event_records)
     records["count"] = (
         pd.to_numeric(records["count"], errors="coerce").fillna(0).astype(int)
     )
+    records["event_date"] = pd.to_datetime(
+        records["event_date"],
+        utc=True,
+        errors="coerce",
+    )
+    records = records.dropna(subset=["event_date"])
+    if records.empty:
+        return _empty_event_timeline_frame(event_keys), meta
 
-    if has_real_dates:
-        records["event_date"] = pd.to_datetime(
-            records["event_date"],
-            utc=True,
-            errors="coerce",
-        )
-        records = records.dropna(subset=["event_date"])
-        records["event_date"] = records["event_date"].dt.date
-        has_real_dates = not records.empty
-
-    if not has_real_dates:
-        return _empty_timeline_frame(), meta
-
+    records["event_date"] = records["event_date"].dt.date
     timeline = records.pivot_table(
         index="event_date",
         columns="event_type",
@@ -72,24 +73,11 @@ def build_timeline(
         fill_value=0,
     )
 
-    for key in BASE_METRIC_KEYS:
+    for key in event_keys:
         if key not in timeline.columns:
             timeline[key] = 0
 
-    timeline = timeline[list(BASE_METRIC_KEYS)].reset_index().sort_values("event_date")
-    timeline["code_contributions"] = (
-        timeline["commits"] + timeline["branch_created"] + timeline["branch_deleted"]
-    )
-    timeline["collab_contributions"] = (
-        timeline["mr_opened"]
-        + timeline["mr_merged"]
-        + timeline["mr_approved"]
-        + timeline["mr_commented"]
-        + timeline["issue_opened"]
-    )
-    timeline["total_contributions"] = (
-        timeline["code_contributions"] + timeline["collab_contributions"]
-    )
+    timeline = timeline[event_keys].reset_index().sort_values("event_date")
 
     if (
         period_start is not None
@@ -103,6 +91,52 @@ def build_timeline(
             .rename_axis("event_date")
             .reset_index()
         )
+
+    meta["has_real_dates"] = True
+    meta["timeline_days"] = len(timeline)
+    meta["active_days"] = int((timeline[event_keys].sum(axis=1) > 0).sum())
+    return timeline, meta
+
+
+def build_timeline(
+    event_records: list[dict[str, object]],
+    has_real_dates: bool,
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> tuple[pd.DataFrame, dict[str, bool | int | str]]:
+    """Build daily timeline aggregates from normalized event records."""
+    timeline, meta = build_event_type_timeline(
+        event_records,
+        list(BASE_METRIC_KEYS),
+        period_start=period_start,
+        period_end=period_end,
+    )
+    if not event_records and has_real_dates:
+        return _empty_timeline_frame(), {
+            "has_real_dates": False,
+            "using_synthetic_timeline": False,
+        }
+
+    if not has_real_dates:
+        meta["has_real_dates"] = False
+        return _empty_timeline_frame(), meta
+
+    if timeline.empty:
+        return _empty_timeline_frame(), meta
+
+    timeline["code_contributions"] = (
+        timeline["commits"] + timeline["branch_created"] + timeline["branch_deleted"]
+    )
+    timeline["collab_contributions"] = (
+        timeline["mr_opened"]
+        + timeline["mr_merged"]
+        + timeline["mr_approved"]
+        + timeline["mr_commented"]
+        + timeline["issue_opened"]
+    )
+    timeline["total_contributions"] = (
+        timeline["code_contributions"] + timeline["collab_contributions"]
+    )
 
     meta["has_real_dates"] = True
     meta["timeline_days"] = len(timeline)

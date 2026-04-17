@@ -320,21 +320,38 @@ def build_project_activity_bar(project_data):
 
 def build_daily_activity_trend(timeline_df):
     """Build daily activity line chart with 7-day moving average."""
+    return _build_daily_trend_chart(
+        timeline_df,
+        metric_key="total_contributions",
+        metric_label="Daily Total",
+        metric_color=PRIMARY,
+        y_axis_title="Contributions",
+        height=380,
+    )
+
+
+def _build_daily_trend_chart(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    timeline_df,
+    metric_key,
+    metric_label,
+    metric_color,
+    y_axis_title,
+    height=340,
+):
+    """Build daily metric trend chart with a 7-day rolling average."""
     timeline = timeline_df.copy()
     timeline["event_date"] = pd.to_datetime(timeline["event_date"])
     timeline = timeline.sort_values("event_date")
-    timeline["rolling_7d"] = (
-        timeline["total_contributions"].rolling(7, min_periods=1).mean()
-    )
+    timeline["rolling_7d"] = timeline[metric_key].rolling(7, min_periods=1).mean()
 
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
             x=timeline["event_date"],
-            y=timeline["total_contributions"],
+            y=timeline[metric_key],
             mode="lines",
-            name="Daily Total",
-            line={"color": PRIMARY, "width": 2},
+            name=metric_label,
+            line={"color": metric_color, "width": 2},
         ),
     )
     fig.add_trace(
@@ -346,7 +363,7 @@ def build_daily_activity_trend(timeline_df):
             line={"color": SECONDARY, "width": 2, "dash": "dash"},
         ),
     )
-    fig.update_layout(height=380, xaxis_title="Date", yaxis_title="Contributions")
+    fig.update_layout(height=height, xaxis_title="Date", yaxis_title=y_axis_title)
     return fig
 
 
@@ -400,3 +417,119 @@ def build_monthly_volume_chart(timeline_df):
     )
     fig.update_layout(height=360)
     return fig
+
+
+def build_jira_top_projects_chart(metric_df, top_n, metric_key, title, label):
+    """Build a horizontal bar chart for Jira project rankings."""
+    top_projects = (
+        metric_df[[metric_key]].sort_values(metric_key, ascending=True).tail(top_n)
+    )
+    top_projects_plot = top_projects.reset_index().rename(columns={"index": "project"})
+    fig = px.bar(
+        top_projects_plot,
+        x=metric_key,
+        y="project",
+        color=metric_key,
+        orientation="h",
+        color_continuous_scale=CONTINUOUS_SCALE,
+        labels={metric_key: label, "project": "Project"},
+        text=metric_key,
+    )
+    fig.update_traces(textposition="outside")
+    fig.update_layout(showlegend=False, height=420, title=title)
+    return fig
+
+
+def build_jira_activity_chart(metric_df):
+    """Build stacked Jira activity chart by project."""
+    jira_activity = (
+        metric_df[["jira_issues_assigned", "jira_issues_closed", "jira_comments"]]
+        .sort_values("jira_issues_closed", ascending=False)
+        .head(20)
+    )
+    fig = px.bar(
+        jira_activity,
+        x=jira_activity.index,
+        y=["jira_issues_assigned", "jira_issues_closed", "jira_comments"],
+        labels={"value": "Count", "index": "Project", "variable": "Metric"},
+        color_discrete_map={
+            "jira_issues_assigned": PRIMARY,
+            "jira_issues_closed": SECONDARY,
+            "jira_comments": ACCENT,
+        },
+    )
+    fig.update_layout(height=480, barmode="stack", xaxis_tickangle=-45)
+    return fig
+
+
+def build_jira_project_details_bar(project_data):
+    """Build per-project Jira activity bar chart."""
+    fig = px.bar(
+        x=["Issues Assigned", "Issues Closed", "Comments", "Story Points Closed"],
+        y=[
+            project_data["jira_issues_assigned"],
+            project_data["jira_issues_closed"],
+            project_data["jira_comments"],
+            project_data["jira_story_points_closed"],
+        ],
+        color=[
+            project_data["jira_issues_assigned"],
+            project_data["jira_issues_closed"],
+            project_data["jira_comments"],
+            project_data["jira_story_points_closed"],
+        ],
+        color_continuous_scale=CONTINUOUS_SCALE,
+        labels={"x": "Jira Metric", "y": "Count"},
+    )
+    fig.update_layout(showlegend=False, height=400, xaxis_tickangle=-45)
+    return fig
+
+
+def build_jira_daily_closed_chart(timeline_df):
+    """Build Jira daily closed issues time series chart."""
+    return _build_jira_daily_trend_chart(
+        timeline_df,
+        metric_key="jira_issues_closed",
+        metric_label="Issues Closed",
+        metric_color=PRIMARY,
+        y_axis_title="Closed Issues",
+    )
+
+
+def build_jira_daily_comments_chart(timeline_df):
+    """Build Jira daily comment activity time series chart."""
+    return _build_jira_daily_trend_chart(
+        timeline_df,
+        metric_key="jira_comments",
+        metric_label="Comments",
+        metric_color=ACCENT,
+        y_axis_title="Comments",
+    )
+
+
+def build_jira_daily_story_points_chart(timeline_df):
+    """Build Jira daily story points closed time series chart."""
+    return _build_jira_daily_trend_chart(
+        timeline_df,
+        metric_key="jira_story_points_closed",
+        metric_label="Story Points Closed",
+        metric_color=HIGHLIGHT,
+        y_axis_title="Story Points",
+    )
+
+
+def _build_jira_daily_trend_chart(
+    timeline_df,
+    metric_key,
+    metric_label,
+    metric_color,
+    y_axis_title,
+):
+    """Build Jira daily metric chart with 7-day rolling average."""
+    return _build_daily_trend_chart(
+        timeline_df,
+        metric_key=metric_key,
+        metric_label=metric_label,
+        metric_color=metric_color,
+        y_axis_title=y_axis_title,
+    )
