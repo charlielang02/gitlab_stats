@@ -278,9 +278,10 @@ def test_fetch_issues_raises_type_error_when_payload_is_not_mapping(monkeypatch)
 
 def test_fetch_issues_supports_pagination(monkeypatch):
     """Issue fetch should continue paging until the total issue count is consumed."""
-    calls = []
+    calls: list[int] = []
 
     def _fake_request(_base_url, _path, _token, query_params=None):
+        assert query_params is not None
         calls.append(query_params["startAt"])
         if query_params["startAt"] == 0:
             return {
@@ -515,12 +516,12 @@ def test_fetch_jira_metrics_from_supabase_with_time_happy_path(monkeypatch):
         lambda **_kwargs: rows,
     )
 
-    metrics, totals, timeline_df, timeline_meta = (
-        jira_ingester.fetch_jira_metrics_from_supabase_with_time(
-            period_start=date(2026, 4, 1),
-            period_end=date(2026, 4, 30),
-        )
+    result = jira_ingester.fetch_jira_metrics_from_supabase_with_time(
+        period_start=date(2026, 4, 1),
+        period_end=date(2026, 4, 30),
     )
+    assert result is not None
+    metrics, totals, timeline_df, timeline_meta = result
 
     assert metrics["PROJ"]["jira_issues_assigned"] == 3
     assert metrics["PROJ"]["jira_issues_closed"] == 2

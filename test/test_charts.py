@@ -460,3 +460,81 @@ def test_build_jira_daily_story_points_chart_adds_rolling_average():
     assert list(traces[0].y) == [3, 6, 9]
     assert list(traces[1].y) == [3.0, 4.5, 6.0]
     assert traces[1].name == "7-Day Average"
+
+
+def test_build_jira_top_projects_chart_respects_top_n_and_labels():
+    """Top Jira chart should keep the requested number of highest projects."""
+    # Arrange
+    metric_df = pd.DataFrame(
+        {
+            "jira_issues_closed": [2, 7, 4],
+        },
+        index=["proj-a", "proj-b", "proj-c"],
+    )
+
+    # Act
+    fig = charts.build_jira_top_projects_chart(
+        metric_df,
+        top_n=2,
+        metric_key="jira_issues_closed",
+        title="Top Jira Projects by Closed Issues",
+        label="Closed Issues",
+    )
+
+    # Assert
+    trace = _trace(fig, 0)
+    assert list(trace.y) == ["proj-c", "proj-b"]
+    assert list(trace.x) == [4, 7]
+    assert list(trace.text) == [4, 7]
+    assert _figure(fig).layout.title.text == "Top Jira Projects by Closed Issues"
+
+
+def test_build_jira_activity_chart_stacks_three_jira_metrics():
+    """Jira activity chart should include assigned, closed, and comments traces."""
+    # Arrange
+    metric_df = pd.DataFrame(
+        {
+            "jira_issues_assigned": [5, 3],
+            "jira_issues_closed": [4, 1],
+            "jira_comments": [2, 6],
+        },
+        index=["proj-a", "proj-b"],
+    )
+
+    # Act
+    fig = charts.build_jira_activity_chart(metric_df)
+
+    # Assert
+    traces = [_trace(fig, index) for index in range(3)]
+    assert [trace.name for trace in traces] == [
+        "jira_issues_assigned",
+        "jira_issues_closed",
+        "jira_comments",
+    ]
+    assert _figure(fig).layout.barmode == "stack"
+    assert _figure(fig).layout.height == 480
+
+
+def test_build_jira_project_details_bar_emits_expected_metric_order():
+    """Per-project Jira detail chart should include four expected metric bars."""
+    # Arrange
+    project_data = {
+        "jira_issues_assigned": 8,
+        "jira_issues_closed": 5,
+        "jira_comments": 3,
+        "jira_story_points_closed": 13,
+    }
+
+    # Act
+    fig = charts.build_jira_project_details_bar(project_data)
+
+    # Assert
+    trace = _trace(fig, 0)
+    assert list(trace.x) == [
+        "Issues Assigned",
+        "Issues Closed",
+        "Comments",
+        "Story Points Closed",
+    ]
+    assert list(trace.y) == [8, 5, 3, 13]
+    assert _figure(fig).layout.height == 400
