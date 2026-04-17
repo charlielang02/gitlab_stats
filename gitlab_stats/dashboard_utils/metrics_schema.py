@@ -22,3 +22,15 @@ PERCENTAGE_METRIC_KEYS = (
     "code_pct",
     "collab_pct",
 )
+
+JIRA_METRIC_KEYS = (
+    "jira_issues_assigned",
+    "jira_issues_closed",
+    "jira_comments",
+    "jira_story_points_closed",
+)
+
+JIRA_TOTAL_METRIC_KEYS = (
+    *JIRA_METRIC_KEYS,
+    "total_jira_activity",
+)

@@ -398,3 +398,143 @@ def test_build_monthly_volume_chart_formats_monthly_axis():
     ]
     assert xaxis.tickformat == "%b %Y"
     assert xaxis.tickmode == "array"
+
+
+def _jira_timeline_df() -> pd.DataFrame:
+    """Create Jira timeline dataframe for chart tests."""
+    return pd.DataFrame(
+        {
+            "event_date": ["2026-03-03", "2026-03-01", "2026-03-02"],
+            "jira_issues_closed": [3, 1, 2],
+            "jira_comments": [6, 2, 4],
+            "jira_story_points_closed": [9, 3, 6],
+        },
+    )
+
+
+def test_build_jira_daily_closed_chart_adds_rolling_average():
+    """Closed-issues chart should sort dates and add a 7-day average trace."""
+    # Arrange
+    timeline_df = _jira_timeline_df()
+
+    # Act
+    fig = charts.build_jira_daily_closed_chart(timeline_df)
+
+    # Assert
+    traces = [_trace(fig, index) for index in range(2)]
+    assert list(pd.to_datetime(traces[0].x).date) == [
+        date(2026, 3, 1),
+        date(2026, 3, 2),
+        date(2026, 3, 3),
+    ]
+    assert list(traces[0].y) == [1, 2, 3]
+    assert list(traces[1].y) == [1.0, 1.5, 2.0]
+    assert traces[1].name == "7-Day Average"
+
+
+def test_build_jira_daily_comments_chart_adds_rolling_average():
+    """Comments chart should include daily values and a 7-day average trace."""
+    # Arrange
+    timeline_df = _jira_timeline_df()
+
+    # Act
+    fig = charts.build_jira_daily_comments_chart(timeline_df)
+
+    # Assert
+    traces = [_trace(fig, index) for index in range(2)]
+    assert list(traces[0].y) == [2, 4, 6]
+    assert list(traces[1].y) == [2.0, 3.0, 4.0]
+    assert traces[1].name == "7-Day Average"
+
+
+def test_build_jira_daily_story_points_chart_adds_rolling_average():
+    """Story points chart should include daily values and a 7-day average trace."""
+    # Arrange
+    timeline_df = _jira_timeline_df()
+
+    # Act
+    fig = charts.build_jira_daily_story_points_chart(timeline_df)
+
+    # Assert
+    traces = [_trace(fig, index) for index in range(2)]
+    assert list(traces[0].y) == [3, 6, 9]
+    assert list(traces[1].y) == [3.0, 4.5, 6.0]
+    assert traces[1].name == "7-Day Average"
+
+
+def test_build_jira_top_projects_chart_respects_top_n_and_labels():
+    """Top Jira chart should keep the requested number of highest projects."""
+    # Arrange
+    metric_df = pd.DataFrame(
+        {
+            "jira_issues_closed": [2, 7, 4],
+        },
+        index=["proj-a", "proj-b", "proj-c"],
+    )
+
+    # Act
+    fig = charts.build_jira_top_projects_chart(
+        metric_df,
+        top_n=2,
+        metric_key="jira_issues_closed",
+        title="Top Jira Projects by Closed Issues",
+        label="Closed Issues",
+    )
+
+    # Assert
+    trace = _trace(fig, 0)
+    assert list(trace.y) == ["proj-c", "proj-b"]
+    assert list(trace.x) == [4, 7]
+    assert list(trace.text) == [4, 7]
+    assert _figure(fig).layout.title.text == "Top Jira Projects by Closed Issues"
+
+
+def test_build_jira_activity_chart_stacks_three_jira_metrics():
+    """Jira activity chart should include assigned, closed, and comments traces."""
+    # Arrange
+    metric_df = pd.DataFrame(
+        {
+            "jira_issues_assigned": [5, 3],
+            "jira_issues_closed": [4, 1],
+            "jira_comments": [2, 6],
+        },
+        index=["proj-a", "proj-b"],
+    )
+
+    # Act
+    fig = charts.build_jira_activity_chart(metric_df)
+
+    # Assert
+    traces = [_trace(fig, index) for index in range(3)]
+    assert [trace.name for trace in traces] == [
+        "jira_issues_assigned",
+        "jira_issues_closed",
+        "jira_comments",
+    ]
+    assert _figure(fig).layout.barmode == "stack"
+    assert _figure(fig).layout.height == 480
+
+
+def test_build_jira_project_details_bar_emits_expected_metric_order():
+    """Per-project Jira detail chart should include four expected metric bars."""
+    # Arrange
+    project_data = {
+        "jira_issues_assigned": 8,
+        "jira_issues_closed": 5,
+        "jira_comments": 3,
+        "jira_story_points_closed": 13,
+    }
+
+    # Act
+    fig = charts.build_jira_project_details_bar(project_data)
+
+    # Assert
+    trace = _trace(fig, 0)
+    assert list(trace.x) == [
+        "Issues Assigned",
+        "Issues Closed",
+        "Comments",
+        "Story Points Closed",
+    ]
+    assert list(trace.y) == [8, 5, 3, 13]
+    assert _figure(fig).layout.height == 400

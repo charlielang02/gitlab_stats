@@ -89,6 +89,64 @@ def test_prepare_metric_df_orders_columns_and_sorts_by_total_contributions():
     assert list(metric_df.columns[: len(ordered_columns)]) == ordered_columns
 
 
+def test_prepare_jira_metric_df_orders_columns_and_sorts_by_closed_issues():
+    """Jira metric frame should follow Jira key order and sort by closed issues."""
+    # Arrange
+    metrics = {
+        "project-b": {
+            "jira_issues_assigned": 5,
+            "jira_issues_closed": 2,
+            "jira_comments": 4,
+            "jira_story_points_closed": 7,
+            "total_jira_activity": 18,
+            "custom_metric": 1,
+        },
+        "project-a": {
+            "jira_issues_assigned": 8,
+            "jira_issues_closed": 6,
+            "jira_comments": 3,
+            "jira_story_points_closed": 9,
+            "total_jira_activity": 26,
+        },
+    }
+
+    # Act
+    metric_df, ordered_columns = helpers.prepare_jira_metric_df(metrics)
+
+    # Assert
+    assert list(metric_df.index) == ["project-a", "project-b"]
+    assert ordered_columns == [
+        "jira_issues_assigned",
+        "jira_issues_closed",
+        "jira_comments",
+        "jira_story_points_closed",
+    ]
+    assert metric_df.loc["project-a", "jira_issues_closed"] == 6
+    assert metric_df.loc["project-b", "custom_metric"] == 1
+
+
+def test_prepare_jira_metric_df_handles_missing_closed_column_without_sort_error():
+    """Jira metric prep should still return a frame if closed-issues column is absent."""
+    # Arrange
+    metrics = {
+        "project-a": {
+            "jira_issues_assigned": 3,
+            "jira_comments": 1,
+        },
+        "project-b": {
+            "jira_issues_assigned": 5,
+            "jira_comments": 2,
+        },
+    }
+
+    # Act
+    metric_df, ordered_columns = helpers.prepare_jira_metric_df(metrics)
+
+    # Assert
+    assert list(metric_df.index) == ["project-a", "project-b"]
+    assert ordered_columns == ["jira_issues_assigned", "jira_comments"]
+
+
 def test_compute_profile_summary_handles_empty_metric_df():
     """Empty inputs should produce the no-activity summary."""
     # Arrange

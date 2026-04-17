@@ -16,7 +16,7 @@ from urllib.parse import urlencode
 from urllib.request import Request
 from urllib.request import urlopen
 
-from gitlab_stats.settings import read_setting
+from gitlab_stats.settings import read_supabase_setting
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class SupabaseRequestError(RuntimeError):
 
 def _supabase_rest_base_url() -> str:
     """Return Supabase REST API base URL."""
-    supabase_url = read_setting("SUPABASE_URL")
+    supabase_url = read_supabase_setting("SUPABASE_URL")
     if not supabase_url:
         raise SupabaseConfigError.missing_url()
 
@@ -85,7 +85,7 @@ def _supabase_rest_base_url() -> str:
 
 def _read_api_keys_for_select() -> list[str]:
     """Return service-role read key for server-side dashboard queries."""
-    key = read_setting("SUPABASE_SERVICE_ROLE_KEY")
+    key = read_supabase_setting("SUPABASE_SERVICE_ROLE_KEY")
     if not key:
         raise SupabaseConfigError.missing_read_key()
     return [key]
@@ -93,7 +93,7 @@ def _read_api_keys_for_select() -> list[str]:
 
 def _write_api_key() -> str:
     """Return service-role key for Supabase upserts."""
-    key = read_setting("SUPABASE_SERVICE_ROLE_KEY")
+    key = read_supabase_setting("SUPABASE_SERVICE_ROLE_KEY")
     if not key:
         raise SupabaseConfigError.missing_write_key()
 
@@ -171,16 +171,26 @@ def _parse_iso_date(raw_value: Any) -> date | None:
 
 def fetch_event_date_bounds_from_supabase() -> tuple[date, date] | None:
     """Fetch earliest and latest event dates using lightweight limit queries."""
+    return fetch_event_date_bounds_from_table("events")
+
+
+def fetch_jira_event_date_bounds_from_supabase() -> tuple[date, date] | None:
+    """Fetch earliest and latest Jira event dates using lightweight limit queries."""
+    return fetch_event_date_bounds_from_table("jira_events")
+
+
+def fetch_event_date_bounds_from_table(table_name: str) -> tuple[date, date] | None:
+    """Fetch earliest and latest event dates for a specific table."""
     read_keys = _read_api_keys_for_select()
 
-    oldest_path = "events?" + urlencode(
+    oldest_path = f"{table_name}?" + urlencode(
         {
             "select": "event_date",
             "order": "event_date.asc",
             "limit": 1,
         },
     )
-    newest_path = "events?" + urlencode(
+    newest_path = f"{table_name}?" + urlencode(
         {
             "select": "event_date",
             "order": "event_date.desc",
@@ -221,6 +231,35 @@ def fetch_events_from_supabase(
     period_end: date | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch event rows from Supabase for the dashboard timeline window."""
+    return fetch_events_from_table(
+        "events",
+        lookback_days=lookback_days,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+
+def fetch_jira_events_from_supabase(
+    lookback_days: int,
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch Jira event rows from Supabase for the dashboard timeline window."""
+    return fetch_events_from_table(
+        "jira_events",
+        lookback_days=lookback_days,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+
+def fetch_events_from_table(
+    table_name: str,
+    lookback_days: int,
+    period_start: date | None = None,
+    period_end: date | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch event rows from a specific Supabase table for the dashboard window."""
     lookback_days = max(lookback_days, 1)
 
     read_keys = _read_api_keys_for_select()
@@ -243,7 +282,7 @@ def fetch_events_from_supabase(
             ),
         },
     )
-    path = f"events?{query}"
+    path = f"{table_name}?{query}"
     last_error: SupabaseRequestError | None = None
     response: list[dict[str, Any]] | dict[str, Any] | None = None
     for read_key in read_keys:
@@ -265,8 +304,11 @@ def fetch_events_from_supabase(
     return response
 
 
-def upsert_events_to_supabase(event_records: list[dict[str, Any]]) -> int:
-    """Upsert event records into Supabase events table."""
+def _upsert_event_records_to_table(  # pylint: disable=too-many-locals
+    event_records: list[dict[str, Any]],
+    table_name: str,
+) -> int:
+    """Upsert normalized event records into a specific Supabase table."""
     if not event_records:
         return 0
 
@@ -303,7 +345,7 @@ def upsert_events_to_supabase(event_records: list[dict[str, Any]]) -> int:
         return 0
 
     conflict = quote("project,event_type,event_date", safe=",")
-    path = f"events?on_conflict={conflict}"
+    path = f"{table_name}?on_conflict={conflict}"
     batch_size = 500
     for batch in _chunked(payload, batch_size):
         _request_json(
@@ -314,5 +356,19 @@ def upsert_events_to_supabase(event_records: list[dict[str, Any]]) -> int:
             extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
         )
 
-    logger.info("Upserted %s event records to Supabase", len(payload))
+    logger.info(
+        "Upserted %s event records to Supabase table %s",
+        len(payload),
+        table_name,
+    )
     return len(payload)
+
+
+def upsert_events_to_supabase(event_records: list[dict[str, Any]]) -> int:
+    """Upsert GitLab event records into Supabase events table."""
+    return _upsert_event_records_to_table(event_records, "events")
+
+
+def upsert_jira_events_to_supabase(event_records: list[dict[str, Any]]) -> int:
+    """Upsert Jira event records into Supabase jira_events table."""
+    return _upsert_event_records_to_table(event_records, "jira_events")

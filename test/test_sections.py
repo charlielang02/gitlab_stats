@@ -626,6 +626,172 @@ def test_render_top_projects_uses_slider_for_more_than_three_projects(monkeypatc
     ]
 
 
+def test_render_jira_analysis_shows_all_projects_without_slider_for_small_sets(
+    monkeypatch,
+):
+    """Jira analysis should avoid slider when there are three or fewer projects."""
+    # Arrange
+    calls = _install_streamlit_spy(monkeypatch)
+    jira_metric_df = pd.DataFrame(
+        {
+            "jira_issues_assigned": [5, 3, 1],
+            "jira_issues_closed": [4, 2, 1],
+            "jira_comments": [2, 1, 0],
+            "jira_story_points_closed": [8, 3, 1],
+            "total_jira_activity": [19, 9, 3],
+        },
+        index=["proj-a", "proj-b", "proj-c"],
+    )
+    jira_timeline_df = pd.DataFrame(
+        {
+            "event_date": ["2026-03-01", "2026-03-02"],
+            "jira_issues_closed": [1, 2],
+            "jira_comments": [0, 1],
+            "jira_story_points_closed": [2, 3],
+        },
+    )
+    top_calls: list[int] = []
+
+    def _top_chart(
+        _df: pd.DataFrame,
+        top_n: int,
+        _metric_key: str,
+        _title: str,
+        _label: str,
+    ):
+        top_calls.append(top_n)
+        return "jira-top-figure"
+
+    monkeypatch.setattr(sections, "build_jira_top_projects_chart", _top_chart)
+    monkeypatch.setattr(
+        sections,
+        "build_jira_activity_chart",
+        lambda *_: "jira-activity",
+    )
+    monkeypatch.setattr(
+        sections,
+        "build_jira_daily_closed_chart",
+        lambda *_: "jira-closed-ts",
+    )
+    monkeypatch.setattr(
+        sections,
+        "build_jira_daily_comments_chart",
+        lambda *_: "jira-comments-ts",
+    )
+    monkeypatch.setattr(
+        sections,
+        "build_jira_daily_story_points_chart",
+        lambda *_: "jira-sp-ts",
+    )
+    monkeypatch.setattr(
+        sections,
+        "build_jira_project_details_bar",
+        lambda *_: "jira-project-detail",
+    )
+    monkeypatch.setattr(
+        sections.st,
+        "selectbox",
+        lambda _label, options, **_kwargs: options[0],
+    )
+
+    # Act
+    sections.render_jira_analysis(
+        jira_metric_df,
+        jira_timeline_df,
+        {"window_label": "Last 30 days"},
+    )
+
+    # Assert
+    assert len(calls["slider"]) == 0
+    assert any(
+        "Showing all 3 Jira projects." in call[0][0] for call in calls["captions"]
+    )
+    assert top_calls == [3, 3]
+
+
+def test_render_jira_analysis_uses_slider_for_more_than_three_projects(monkeypatch):
+    """Jira analysis should use the same min-3 slider logic as GitLab top projects."""
+    # Arrange
+    calls = _install_streamlit_spy(monkeypatch)
+    jira_metric_df = pd.DataFrame(
+        {
+            "jira_issues_assigned": [8, 7, 6, 5],
+            "jira_issues_closed": [7, 6, 5, 4],
+            "jira_comments": [3, 2, 2, 1],
+            "jira_story_points_closed": [13, 8, 7, 6],
+            "total_jira_activity": [31, 23, 20, 16],
+        },
+        index=["proj-a", "proj-b", "proj-c", "proj-d"],
+    )
+    jira_timeline_df = pd.DataFrame(
+        {
+            "event_date": ["2026-03-01", "2026-03-02"],
+            "jira_issues_closed": [1, 2],
+            "jira_comments": [0, 1],
+            "jira_story_points_closed": [2, 3],
+        },
+    )
+    top_calls: list[int] = []
+
+    def _top_chart(
+        _df: pd.DataFrame,
+        top_n: int,
+        _metric_key: str,
+        _title: str,
+        _label: str,
+    ):
+        top_calls.append(top_n)
+        return "jira-top-figure"
+
+    monkeypatch.setattr(sections, "build_jira_top_projects_chart", _top_chart)
+    monkeypatch.setattr(
+        sections,
+        "build_jira_activity_chart",
+        lambda *_: "jira-activity",
+    )
+    monkeypatch.setattr(
+        sections,
+        "build_jira_daily_closed_chart",
+        lambda *_: "jira-closed-ts",
+    )
+    monkeypatch.setattr(
+        sections,
+        "build_jira_daily_comments_chart",
+        lambda *_: "jira-comments-ts",
+    )
+    monkeypatch.setattr(
+        sections,
+        "build_jira_daily_story_points_chart",
+        lambda *_: "jira-sp-ts",
+    )
+    monkeypatch.setattr(
+        sections,
+        "build_jira_project_details_bar",
+        lambda *_: "jira-project-detail",
+    )
+    monkeypatch.setattr(
+        sections.st,
+        "selectbox",
+        lambda _label, options, **_kwargs: options[0],
+    )
+
+    # Act
+    sections.render_jira_analysis(
+        jira_metric_df,
+        jira_timeline_df,
+        {"window_label": "Last 30 days"},
+    )
+
+    # Assert
+    assert len(calls["slider"]) == 1
+    label, min_value, max_value, value, _ = calls["slider"][0]
+    assert label == "Number of Jira projects to display"
+    assert min_value == 3
+    assert max_value == 4
+    assert value == 4
+    assert top_calls == [4, 4]
+
+
 def test_render_performance_tabs_renders_all_tab_charts(monkeypatch):
     """Performance tabs should emit four charts and read the heatmap checkbox."""
     # Arrange
