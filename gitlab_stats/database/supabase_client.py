@@ -16,6 +16,8 @@ from urllib.parse import urlencode
 from urllib.request import Request
 from urllib.request import urlopen
 
+from gitlab_stats.project_privacy import is_project_alias
+from gitlab_stats.project_privacy import validate_event_identity
 from gitlab_stats.settings import read_supabase_setting
 
 logger = logging.getLogger(__name__)
@@ -104,7 +106,7 @@ def _request_json(
     method: str,
     path: str,
     api_key: str,
-    payload: list[dict[str, Any]] | None = None,
+    payload: list[dict[str, Any]] | dict[str, Any] | None = None,
     extra_headers: dict[str, str] | None = None,
 ) -> list[dict[str, Any]] | dict[str, Any] | None:
     """Execute a Supabase REST request and decode JSON responses."""
@@ -239,6 +241,65 @@ def fetch_events_from_supabase(
     )
 
 
+def fetch_all_event_identities(
+    table_name: str,
+    *,
+    include_counts: bool = False,
+) -> list[dict[str, Any]]:
+    """Read all migration identities, optionally with counts for reconciliation."""
+    if table_name not in {"events", "jira_events"}:
+        message = "Unsupported migration table"
+        raise ValueError(message)
+    api_key = _write_api_key()
+    rows: list[dict[str, Any]] = []
+    while True:
+        query = urlencode(
+            {
+                "select": (
+                    "project,event_type,event_date,count"
+                    if include_counts
+                    else "project,event_type,event_date"
+                ),
+                "order": "project.asc,event_type.asc,event_date.asc",
+                "limit": 500,
+                "offset": len(rows),
+            },
+        )
+        page = _request_json("GET", f"{table_name}?{query}", api_key)
+        if not isinstance(page, list):
+            raise SupabaseRequestError.expected_list_payload()
+        if not page:
+            return rows
+        rows.extend(page)
+
+
+def replace_project_label(table_name: str, old_label: str, alias: str) -> None:
+    """Update only a project's label; retain all other stored event fields."""
+    if table_name not in {"events", "jira_events"}:
+        message = "Unsupported migration table"
+        raise ValueError(message)
+    source = "gitlab" if table_name == "events" else "jira"
+
+    if not is_project_alias(alias, source):
+        message = "Invalid migration alias"
+        raise ValueError(message)
+    query = urlencode({"project": f"eq.{old_label}", "select": "project"})
+    updated_rows = _request_json(
+        "PATCH",
+        f"{table_name}?{query}",
+        _write_api_key(),
+        payload={"project": alias},
+        extra_headers={"Prefer": "return=representation"},
+    )
+    if (
+        not isinstance(updated_rows, list)
+        or not updated_rows
+        or any(row.get("project") != alias for row in updated_rows)
+    ):
+        message = "Project update did not confirm matching rows; inspect the target before retrying"
+        raise ValueError(message)
+
+
 def fetch_jira_events_from_supabase(
     lookback_days: int,
     period_start: date | None = None,
@@ -323,6 +384,8 @@ def _upsert_event_records_to_table(  # pylint: disable=too-many-locals
         if not event_date_raw or not project_name or not event_type or count <= 0:
             continue
 
+        source = "gitlab" if table_name == "events" else "jira"
+        validate_event_identity(project_name, event_type, source)
         event_date = str(event_date_raw)
         key = (project_name, event_type, event_date)
         aggregated_counts[key] = aggregated_counts.get(key, 0) + count

@@ -1,0 +1,6 @@
+README.md:198 MD040/fenced-code-language Fenced code blocks should have a language specified ["json" is not allowed]
+README.md:221:121 MD013/line-length Line length [Expected: 120; Actual: 164]
+README.md:227:121 MD013/line-length Line length [Expected: 120; Actual: 172]
+README.md:250:121 MD013/line-length Line length [Expected: 120; Actual: 180]
+README.md:257:121 MD013/line-length Line length [Expected: 120; Actual: 259]
+README.md:326 MD040/fenced-code-language Fenced code blocks should have a language specified ["json" is not allowed]

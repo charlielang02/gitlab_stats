@@ -36,6 +36,7 @@ from gitlab_stats.database.supabase_client import SupabaseConfigError
 from gitlab_stats.database.supabase_client import SupabaseRequestError
 from gitlab_stats.database.supabase_client import fetch_event_date_bounds_from_supabase
 from gitlab_stats.database.supabase_client import fetch_events_from_supabase
+from gitlab_stats.project_privacy import project_alias
 from gitlab_stats.settings import read_setting
 
 logger = logging.getLogger(__name__)
@@ -223,31 +224,17 @@ def _derive_project_totals(project_data: dict[str, Any]) -> None:
 
 def _event_project_name(
     event: dict[str, Any],
-    base_url: str,
-    token: str,
-    project_name_cache: dict[int, str | None],
+    _base_url: str,
+    _token: str,
+    _project_name_cache: dict[int, str | None],
 ) -> str | None:
+    """Derive a stable alias without resolving or falling back to project names."""
     project = event.get("project") or {}
-    project_id = event.get("project_id") or project.get("id")
-    if project_id is not None:
-        resolved_project_id = _to_int(project_id)
-        if resolved_project_id > 0:
-            project_name = _fetch_project_name(
-                base_url,
-                token,
-                resolved_project_id,
-                project_name_cache,
-            )
-            if project_name:
-                return project_name
-
-    project = event.get("project") or {}
-    if isinstance(project, dict):
-        path = project.get("name") or project.get("path_with_namespace")
-        if path:
-            return str(path).rsplit("/", maxsplit=1)[-1]
-
-    return None
+    nested_id = project.get("id") if isinstance(project, dict) else None
+    project_id = event.get("project_id") or nested_id
+    if project_id is None and not project:
+        return None
+    return project_alias("gitlab", project_id)
 
 
 def _event_date_from_api_event(event: dict[str, Any]):

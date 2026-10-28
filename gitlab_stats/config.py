@@ -25,7 +25,7 @@ API_MAX_EVENT_PAGES = 200
 DATA_CACHE_TTL_SECONDS = 1800  # 30 minutes
 
 # Supabase timeline read window (days) for dashboard metrics.
-SUPABASE_LOOKBACK_DAYS = 365
+SUPABASE_LOOKBACK_DAYS = 730
 
 # Optional holiday filtering for streak calculations (ISO country code, e.g. "US").
 # Leave empty to use weekday-only streak calculations.

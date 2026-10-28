@@ -213,8 +213,8 @@ def test_build_non_zero_metrics_filters_empty_and_tracks_dates(monkeypatch):
     # Arrange
 
     def _fake_fetch_project_name(*_):
-        """Return a stable project name for event metric aggregation."""
-        return "project-a"
+        """Reject attempts to look up private project names during ingestion."""
+        pytest.fail("Project name lookup must not occur")
 
     monkeypatch.setattr(
         ingester,
@@ -248,13 +248,22 @@ def test_build_non_zero_metrics_filters_empty_and_tracks_dates(monkeypatch):
 
     # Assert
     assert has_real_dates is True
-    assert list(metrics.keys()) == ["project-a"]
-    assert metrics["project-a"]["commits"] == 2
-    assert metrics["project-a"]["total_contributions"] == 2
+    assert list(metrics.keys()) == ["gitlab-project-1"]
+    assert metrics["gitlab-project-1"]["commits"] == 2
+    assert metrics["gitlab-project-1"]["total_contributions"] == 2
     assert len(records) == 1
+    assert records[0]["project"] == "gitlab-project-1"
     assert records[0]["event_type"] == "commits"
     assert records[0]["count"] == 2
     assert records[0]["event_date"] == date(2026, 3, 5)
+
+
+def test_project_identity_never_falls_back_to_private_names():
+    """Use source IDs and fail closed for project data without a valid ID."""
+    event = {"project": {"id": 12, "name": "Private name"}}
+    assert ingester._event_project_name(event, "", "", {}) == "gitlab-project-12"
+    with pytest.raises(ValueError, match="numeric ID"):
+        ingester._event_project_name({"project": {"name": "Private name"}}, "", "", {})
 
 
 def test_fetch_metrics_from_api_returns_none_when_ingestion_fails(monkeypatch):

@@ -9,3 +9,16 @@ venv
 .git/
 /*.txt
 .env
+project-names.local.json
+project-migration.local.json
+project-migration-ambiguous.local.json
+project-migration-audit*.local.json
+project-migration-reconciliation*.local.json
+project-migration-proposed*.local.json
+project-migration-prod-backup*.local.json
+/gitlab_stats/database/project_migration.py
+/tools/generate_project_mapping.py
+/tools/reconcile_project_mapping.py
+/test/test_generate_project_mapping.py
+/test/test_project_migration.py
+/test/test_reconcile_project_mapping.py

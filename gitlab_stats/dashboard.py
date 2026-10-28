@@ -1,10 +1,13 @@
 """Generate a Streamlit dashboard to visualize GitLab contributions metrics."""
 
 import io
+import json
+import os
 from datetime import UTC
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
+from pathlib import Path
 from time import perf_counter
 
 import pandas as pd
@@ -34,6 +37,7 @@ from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_api_with_t
 from gitlab_stats.gitlab_stats_api_ingester import fetch_metrics_from_supabase_with_time
 from gitlab_stats.gitlab_stats_api_ingester import fetch_supabase_date_bounds
 from gitlab_stats.jira_api_ingester import fetch_jira_metrics_from_supabase_with_time
+from gitlab_stats.project_privacy import is_project_alias
 from gitlab_stats.settings import read_setting
 from gitlab_stats.settings import read_supabase_setting
 
@@ -50,6 +54,38 @@ PRESET_WINDOW_DAYS = {
     "Last 6 months": 182,
     "Last 1 year": 365,
 }
+
+
+def _load_local_project_names() -> dict[str, str]:
+    """Load an opt-in private label map only for a loopback-bound dashboard."""
+    mapping_path = os.environ.get("LOCAL_PROJECT_NAMES_FILE", "").strip()
+    if not mapping_path:
+        return {}
+    if st.get_option("server.address") not in {"127.0.0.1", "::1"}:
+        message = "Local project names require a loopback-bound dashboard"
+        raise ValueError(message)
+    try:
+        with Path(mapping_path).expanduser().open(encoding="utf-8") as mapping_file:
+            names = json.load(mapping_file)
+    except (OSError, ValueError):
+        message = "Unable to load local project names"
+        raise ValueError(message) from None
+    if not isinstance(names, dict) or any(
+        not (is_project_alias(alias, "gitlab") or is_project_alias(alias, "jira"))
+        or not isinstance(name, str)
+        or not name.strip()
+        for alias, name in names.items()
+    ):
+        message = "Invalid local project name mapping"
+        raise ValueError(message)
+    return names
+
+
+def _local_project_labels(metric_df, names: dict[str, str]):
+    """Return display labels without mutating aliased metrics or cached inputs."""
+    return metric_df.rename(
+        index={alias: f"{name} ({alias})" for alias, name in names.items()},
+    )
 
 
 def _normalize_metrics_for_cache(metrics, total_metrics):
@@ -692,6 +728,12 @@ def main():
     """Run the dashboard app."""
     configure_page()
 
+    try:
+        local_names = _load_local_project_names()
+    except ValueError as error:
+        st.error(str(error))
+        st.stop()
+
     result = get_metrics()
     if result is None:
         st.error("Unable to load metrics. Please check your data source.")
@@ -699,6 +741,8 @@ def main():
 
     metrics, total_metrics, timeline_df, timeline_meta = result
     metric_df, ordered_columns = prepare_metric_df(metrics)
+    export_metric_df = metric_df
+    metric_df = _local_project_labels(metric_df, local_names)
 
     jira_result = None
     jira_metric_df = None
@@ -726,6 +770,7 @@ def main():
             jira_result
         )
         jira_metric_df, _ = prepare_jira_metric_df(jira_metrics)
+        jira_metric_df = _local_project_labels(jira_metric_df, local_names)
 
     render_executive_summary(metric_df, total_metrics, jira_total_metrics)
     render_profile(metric_df, total_metrics)
@@ -742,7 +787,7 @@ def main():
         and jira_timeline_meta is not None
     ):
         render_jira_analysis(jira_metric_df, jira_timeline_df, jira_timeline_meta)
-    render_export_with_timeline(metric_df, timeline_df)
+    render_export_with_timeline(export_metric_df, timeline_df)
 
 
 if __name__ == "__main__":

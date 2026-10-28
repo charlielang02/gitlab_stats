@@ -119,6 +119,156 @@ Primary runtime flags are in `gitlab_stats/config.py`:
 - `DATA_CACHE_TTL_SECONDS`: Streamlit cache TTL for expensive loads
 - `STREAK_HOLIDAY_COUNTRY`: Optional ISO country code for holiday-aware streaks
 
+### Migrating Existing Project Labels
+
+Do not delete the database to remove legacy project names. A default sync only
+fetches 365 days, GitLab pagination is capped at 200 pages, and API access or
+Jira's current issue state may differ from earlier ingestion. A full rebuild
+is only appropriate after separately proving complete source coverage.
+
+New ingestion derives `gitlab-project-<id>` and `jira-project-<id>` directly from
+numeric source project IDs. These aliases are deterministic across users of
+the same source instance. They are pseudonyms, not anonymization: IDs can be
+correlated by people with source access and can collide across instances.
+
+For existing records:
+
+Generate the private mapping automatically from both configured APIs:
+
+```powershell
+poetry run python -m tools.generate_project_mapping
+```
+
+The generator loads credentials locally from the environment, discovers all
+projects visible to those credentials, and writes the ignored repository-root
+`project-migration.local.json`. It also writes an ignored
+`project-migration-ambiguous.local.json` listing labels that match multiple IDs.
+Ambiguous labels are excluded from the migration mapping rather than guessed.
+Neither project names nor credentials are printed, and no database is accessed.
+Existing output files are never overwritten. Renamed, deleted, or inaccessible
+projects may require additional reconciliation when migration preflight runs.
+Use the generated mapping path with the migration commands below instead of
+creating the example file manually. Keep both generated files private; ignore
+rules prevent ordinary Git adds but do not encrypt them or prevent forced adds.
+
+For backup, preflight, and application:
+
+To automatically identify only the labels blocking migration, run this read-only
+audit after generating the mapping:
+
+```powershell
+poetry run python -m gitlab_stats.database.project_migration --mapping project-migration.local.json --audit
+```
+
+Audit mode requires the explicit dev-scoped settings described below and uses
+the configured `SUPABASE_DEV_URL`; it cannot apply updates. It scans both tables,
+prints only counts, and writes the ignored `project-migration-audit.local.json`.
+That private report lists unresolved labels, candidate aliases for known name
+collisions, affected dates/categories, and any invalid identities or destination
+collisions. Names absent from the current API mapping remain unresolved; the
+audit does not guess IDs or modify the mapping. A successful audit command means
+the report was generated, not that migration is ready; check the printed
+`Ready for migration` result. Existing reports are not overwritten. Use
+`--audit-report project-migration-audit-2.local.json` for a subsequent run.
+
+For ambiguous GitLab labels, gather historical evidence without changing the
+database or existing mapping:
+
+```powershell
+poetry run python -m tools.reconcile_project_mapping
+```
+
+This compares current stored counts with all returned user-event pages over the
+affected dates using the normal ingestion rules. It writes ignored private files
+`project-migration-reconciliation.local.json` (evidence) and
+`project-migration-proposed.local.json` (a separate mapping proposal). Existing
+files are not overwritten. A rename is proposed only for an exact daily-count
+match to one accessible candidate with no competing candidate activity. Split
+activity, count mismatches, and incomplete access remain unresolved. Pagination
+completion cannot prove server-side historical retention, so review the evidence
+before using the proposal in a migration dry run. No updates are applied.
+
+1. Pause scheduled sync jobs and other database writers. Take a private backup.
+2. Verify each old label against its numeric project ID in GitLab or Jira.
+     If a label previously combined multiple projects, reconcile it manually;
+     the migration cannot infer which project owned each historical event.
+3. Create a private mapping outside the repository, such as
+     `C:\Users\you\private\migration.json`:
+
+```json
+{
+    "gitlab": {
+        "Old repository name": "gitlab-project-123"
+    },
+    "jira": {
+        "OLDKEY": "jira-project-10001"
+    }
+}
+```
+
+Both source objects are required; use an empty object for a source with no
+legacy labels. This file differs from the dashboard's alias-to-display-name
+lookup: migration maps old labels to aliases, not the reverse.
+
+Configure `SUPABASE_TARGET=dev`, `SUPABASE_DEV_URL`, and
+`SUPABASE_DEV_SERVICE_ROLE_KEY` locally. The migration deliberately refuses
+legacy credential fallbacks and defaults to dev-only targeting. Confirm the URL belongs
+to your development project in Supabase before running either command.
+
+Run the read-only preflight, substituting your actual development URL:
+
+```powershell
+poetry run python -m gitlab_stats.database.project_migration --mapping 'C:\Users\you\private\migration.json' --expected-dev-url https://YOUR-DEV-PROJECT.supabase.co
+```
+
+After reviewing the row/label counts, explicitly apply the same plan:
+
+```powershell
+poetry run python -m gitlab_stats.database.project_migration --mapping 'C:\Users\you\private\migration.json' --expected-dev-url https://YOUR-DEV-PROJECT.supabase.co --apply
+```
+
+The preflight scans all rows in `events` and `jira_events`, independent of
+dashboard date windows. It stops before writes for unmapped labels, invalid
+aliases/categories/dates, or destination key collisions. Apply changes only
+the `project` field, preserving event dates and counts, then verifies all
+resulting event identities. Output excludes private labels.
+
+Updates are not transactional across labels or tables. If an apply fails,
+keep writers paused, rerun the dry run, and investigate before retrying.
+Already migrated rows are accepted, so a partially completed migration can
+be resumed without renaming them again. Clear Streamlit's data cache or restart
+the dashboard after migration, then verify dev before resuming scheduled sync.
+Production migration is available only through the separate explicit target
+and confirmation flags, after validating the mapping on dev. Configure
+`SUPABASE_TARGET=prod`, `SUPABASE_PROD_URL`, and
+`SUPABASE_PROD_SERVICE_ROLE_KEY` in the migration process. Keep
+`SUPABASE_DEV_URL` configured too: the production guard rejects the dev host.
+Do not change the dashboard or scheduled sync target merely to run a migration.
+Pause production writers before running the production preflight:
+
+```powershell
+poetry run python -m gitlab_stats.database.project_migration --mapping project-migration-proposed.local.json --target prod --expected-prod-url https://YOUR-PROD-PROJECT.supabase.co
+```
+
+After confirming the preflight, apply with explicit confirmation and a new
+private snapshot filename:
+
+```powershell
+poetry run python -m gitlab_stats.database.project_migration --mapping project-migration-proposed.local.json --target prod --expected-prod-url https://YOUR-PROD-PROJECT.supabase.co --apply --confirm-production --backup project-migration-prod-backup.local.json
+```
+
+Production apply saves the complete original metric rows from both tables to
+the ignored snapshot before updates. This is a private metric-data snapshot,
+not a full database/schema backup; it contains the legacy project names, but
+never credentials. It is not overwritten. The migration stops if rows change
+between preflight and the initial update, and verifies all metric values after
+apply. This detects drift but cannot prevent concurrent writers, so keep writers
+paused throughout. Audit and reconciliation modes remain dev-only.
+
+Changing active rows does not remove names from backups, database logs, old CSV
+exports, browser downloads, or screenshots. Review retention and access for
+those separately, and keep both the migration map and local display map private.
+
 ## Choose Your Setup Path
 
 **Do users need to fork this repository?**
@@ -166,6 +316,45 @@ poetry run streamlit run gitlab_stats/dashboard.py
 ```
 
 Open the local URL shown by Streamlit (usually `http://localhost:8501`).
+
+### Private Project Names Locally
+
+The dashboard defaults to project aliases. To show real names locally, create a
+private JSON lookup outside the repository, for example
+`C:\Users\you\private\project-names.json`:
+
+```json
+{
+    "gitlab-project-123": "Repository name",
+    "jira-project-10001": "Jira project name"
+}
+```
+
+Set its path in the local process and bind Streamlit explicitly to loopback:
+
+```powershell
+$env:LOCAL_PROJECT_NAMES_FILE = 'C:\Users\you\private\project-names.json'
+poetry run streamlit run gitlab_stats/dashboard.py --server.address=127.0.0.1
+```
+
+Names are applied after cached data loading, only to the displayed GitLab/Jira
+project labels. Unknown aliases remain unchanged. The lookup is not uploaded or
+written to the database; CSV exports retain the original aliases. Update the
+private lookup yourself when projects are renamed or added.
+
+This option is disabled by default and refuses to load the lookup unless the
+server address is `127.0.0.1` or `::1`. Do not expose this named view through a
+reverse proxy, tunnel, port forwarding, or shared deployment. Loopback binding
+does not protect against those configurations. Keep the lookup out of source
+control and do not configure it on a hosted dashboard. A repository-root
+`project-names.local.json` is ignored as an additional precaution, but a private
+file outside the repository is preferred.
+
+To return to aliases, remove the variable and restart Streamlit:
+
+```powershell
+Remove-Item Env:LOCAL_PROJECT_NAMES_FILE
+```
 
 ## Deployed Dashboard With Supabase (~15 Minutes)
 

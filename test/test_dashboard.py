@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from datetime import timedelta
 from typing import Any
@@ -12,6 +13,67 @@ import pytest
 from gitlab_stats import dashboard
 
 # pylint: disable=protected-access
+
+
+def test_local_project_names_disabled_by_default(monkeypatch):
+    """Do not inspect local files or server settings unless explicitly enabled."""
+    monkeypatch.delenv("LOCAL_PROJECT_NAMES_FILE", raising=False)
+    assert dashboard._load_local_project_names() == {}
+
+
+@pytest.mark.parametrize("address", [None, "", "0.0.0.0", "example.com"])  # noqa: S104
+def test_local_project_names_refuses_non_loopback_server(monkeypatch, address):
+    """Refuse names before opening a file on a publicly bound server."""
+    monkeypatch.setenv("LOCAL_PROJECT_NAMES_FILE", "must-not-be-read.json")
+    monkeypatch.setattr(dashboard.st, "get_option", lambda _: address)
+    with pytest.raises(ValueError, match="loopback"):
+        dashboard._load_local_project_names()
+
+
+def test_local_project_names_loads_private_map_without_mutating_metrics(
+    monkeypatch,
+    tmp_path,
+):
+    """Resolve both sources for display while preserving aliases for exports."""
+    names = {
+        "gitlab-project-12": "Private repository",
+        "jira-project-34": "Private Jira",
+    }
+    mapping_path = tmp_path / "names.json"
+    mapping_path.write_text(json.dumps(names), encoding="utf-8")
+    monkeypatch.setenv("LOCAL_PROJECT_NAMES_FILE", str(mapping_path))
+    monkeypatch.setattr(dashboard.st, "get_option", lambda _: "127.0.0.1")
+    original = pd.DataFrame(
+        {"commits": [1, 2, 3]},
+        index=["gitlab-project-12", "jira-project-34", "gitlab-project-56"],
+    )
+    snapshot = original.copy(deep=True)
+
+    labels = dashboard._local_project_labels(
+        original, dashboard._load_local_project_names(),
+    )
+
+    assert list(labels.index) == [
+        "Private repository (gitlab-project-12)",
+        "Private Jira (jira-project-34)",
+        "gitlab-project-56",
+    ]
+    pd.testing.assert_frame_equal(original, snapshot)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    ['{"private-name": "Name"}', '{"gitlab-project-1": 42}', "[]", "invalid"],
+)
+def test_local_project_names_rejects_invalid_mapping(monkeypatch, tmp_path, payload):
+    """Reject invalid mappings without including private contents in errors."""
+    mapping_path = tmp_path / "names.json"
+    mapping_path.write_text(payload, encoding="utf-8")
+    monkeypatch.setenv("LOCAL_PROJECT_NAMES_FILE", str(mapping_path))
+    monkeypatch.setattr(dashboard.st, "get_option", lambda _: "127.0.0.1")
+    with pytest.raises(ValueError, match="local project name") as error:
+        dashboard._load_local_project_names()
+    assert payload not in str(error.value)
 
 
 def test_normalize_metrics_for_cache_returns_plain_dicts():
@@ -530,6 +592,7 @@ def test_main_stops_with_error_when_metrics_unavailable(monkeypatch):
         calls.append(message)
 
     monkeypatch.setattr(dashboard, "configure_page", _fake_configure_page)
+    monkeypatch.setattr(dashboard, "_load_local_project_names", dict)
     monkeypatch.setattr(dashboard, "get_metrics", _fake_get_metrics)
     monkeypatch.setattr(dashboard.st, "error", _record_error)
 
@@ -545,14 +608,19 @@ def test_main_stops_with_error_when_metrics_unavailable(monkeypatch):
     assert calls == ["Unable to load metrics. Please check your data source."]
 
 
-def test_main_renders_all_sections_when_metrics_available(monkeypatch):
+@pytest.mark.parametrize(
+    "local_names", [{}, {"gitlab-project-12": "Private repository"}],
+)
+def test_main_renders_all_sections_when_metrics_available(monkeypatch, local_names):
     """Main should call each renderer in sequence when metrics load successfully."""
     # Arrange
     render_calls: list[str] = []
-    metric_df = pd.DataFrame({"commits": [1]}, index=["project-a"])
+    metric_df = pd.DataFrame({"commits": [1]}, index=["gitlab-project-12"])
+    displayed_frames = []
+    exported_frames = []
     ordered_columns = ["commits"]
     metrics_result = (
-        {"project-a": {"commits": 1}},
+        {"gitlab-project-12": {"commits": 1}},
         {"total_contributions": 1},
         "timeline",
         {},
@@ -564,6 +632,7 @@ def test_main_renders_all_sections_when_metrics_available(monkeypatch):
         lambda: render_calls.append("configure"),
     )
     monkeypatch.setattr(dashboard, "get_metrics", lambda: metrics_result)
+    monkeypatch.setattr(dashboard, "_load_local_project_names", lambda: local_names)
     monkeypatch.setattr(
         dashboard,
         "prepare_metric_df",
@@ -607,7 +676,7 @@ def test_main_renders_all_sections_when_metrics_available(monkeypatch):
     monkeypatch.setattr(
         dashboard,
         "render_top_projects",
-        lambda *_: render_calls.append("top"),
+        lambda frame: (render_calls.append("top"), displayed_frames.append(frame)),
     )
     monkeypatch.setattr(
         dashboard,
@@ -617,7 +686,7 @@ def test_main_renders_all_sections_when_metrics_available(monkeypatch):
     monkeypatch.setattr(
         dashboard,
         "render_export_with_timeline",
-        lambda *_: render_calls.append("export"),
+        lambda frame, _: (render_calls.append("export"), exported_frames.append(frame)),
     )
 
     # Act
@@ -637,3 +706,9 @@ def test_main_renders_all_sections_when_metrics_available(monkeypatch):
         "deep_dive",
         "export",
     ]
+    expected_label = (
+        "Private repository (gitlab-project-12)" if local_names else "gitlab-project-12"
+    )
+    assert list(displayed_frames[0].index) == [expected_label]
+    assert list(exported_frames[0].index) == ["gitlab-project-12"]
+    assert list(metric_df.index) == ["gitlab-project-12"]

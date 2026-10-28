@@ -105,7 +105,7 @@ def test_fetch_event_records_from_jira_aggregates_project_event_records(monkeypa
         lambda *_: [
             {
                 "fields": {
-                    "project": {"key": "PROJ"},
+                    "project": {"id": "34", "key": "PROJ"},
                     "created": "2026-04-10T12:00:00+00:00",
                     "resolutiondate": "2026-04-11T15:30:00+00:00",
                     "customfield_10016": 5,
@@ -145,10 +145,18 @@ def test_fetch_event_records_from_jira_aggregates_project_event_records(monkeypa
         (record["event_date"], record["project"], record["event_type"]): record["count"]
         for record in records
     }
-    assert normalized[("2026-04-10", "PROJ", "jira_issues_assigned")] == 1
-    assert normalized[("2026-04-11", "PROJ", "jira_issues_closed")] == 1
-    assert normalized[("2026-04-11", "PROJ", "jira_comments")] == 1
-    assert normalized[("2026-04-11", "PROJ", "jira_story_points_closed")] == 5
+    assert normalized[("2026-04-10", "jira-project-34", "jira_issues_assigned")] == 1
+    assert normalized[("2026-04-11", "jira-project-34", "jira_issues_closed")] == 1
+    assert normalized[("2026-04-11", "jira-project-34", "jira_comments")] == 1
+    assert (
+        normalized[("2026-04-11", "jira-project-34", "jira_story_points_closed")] == 5
+    )
+
+
+def test_jira_project_identity_requires_numeric_id():
+    """Never substitute private keys when a Jira project has no ID."""
+    with pytest.raises(ValueError, match="numeric ID"):
+        jira_ingester._extract_project_key({"project": {"key": "Private key"}})
 
 
 def test_fetch_event_records_from_jira_returns_none_when_user_resolution_fails(

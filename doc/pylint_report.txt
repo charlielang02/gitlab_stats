@@ -1,6 +1,18 @@
+************* Module gitlab_stats.dashboard
+R0914: Too many local variables (18/15) (too-many-locals)
+************* Module gitlab_stats.database.project_migration
+R0916: Too many boolean expressions in if statement (11/5) (too-many-boolean-expressions)
+R0916: Too many boolean expressions in if statement (13/5) (too-many-boolean-expressions)
+R0914: Too many local variables (17/15) (too-many-locals)
+R0914: Too many local variables (17/15) (too-many-locals)
+R0913: Too many arguments (6/5) (too-many-arguments)
+R0914: Too many local variables (21/15) (too-many-locals)
+R0912: Too many branches (16/12) (too-many-branches)
+
+
 Report
 ======
-1895 statements analysed.
+2184 statements analysed.
 
 Statistics by type
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -8,13 +20,13 @@ Statistics by type
 +---------+-------+-----------+-----------+------------+---------+
 |type     |number |%documented |%badname |
 +=========+=======+============+=========+
-|module   |16     |100.00      |0.00     |
+|module   |18     |100.00      |0.00     |
 +---------+-------+------------+---------+
 |class    |2      |100.00      |0.00     |
 +---------+-------+------------+---------+
 |method   |6      |100.00      |0.00     |
 +---------+-------+------------+---------+
-|function |145    |100.00      |0.00     |
+|function |161    |100.00      |0.00     |
 +---------+-------+------------+---------+
 
 
@@ -23,20 +35,21 @@ External dependencies
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 ::
 
-dotenv (gitlab_stats.dashboard,gitlab_stats.database.supabase_sync,gitlab_stats.gitlab_stats_api_ingester)
+dotenv (gitlab_stats.dashboard,gitlab_stats.database.project_migration,gitlab_stats.database.supabase_sync,gitlab_stats.gitlab_stats_api_ingester)
 gitlab_stats
 \-config (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.sections,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
 \-dashboard_utils
 | \-activity_rules (gitlab_stats.gitlab_stats_api_ingester)
 | \-charts (gitlab_stats.dashboard_utils.sections)
 | \-helpers (gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.sections)
-| \-metrics_schema (gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.dashboard_utils.timeline_utils,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
+| \-metrics_schema (gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.dashboard_utils.timeline_utils,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester,gitlab_stats.project_privacy)
 | \-timeline_utils (gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
 \-database
-| \-supabase_client (gitlab_stats.database.supabase_sync,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
+| \-supabase_client (gitlab_stats.database.project_migration,gitlab_stats.database.supabase_sync,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
 \-gitlab_stats_api_ingester (gitlab_stats.dashboard,gitlab_stats.database.supabase_sync)
 \-jira_api_ingester (gitlab_stats.dashboard,gitlab_stats.database.supabase_sync)
-\-settings (gitlab_stats.dashboard,gitlab_stats.database.supabase_client,gitlab_stats.database.supabase_sync,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
+\-project_privacy (gitlab_stats.dashboard,gitlab_stats.database.project_migration,gitlab_stats.database.supabase_client,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
+\-settings (gitlab_stats.dashboard,gitlab_stats.database.project_migration,gitlab_stats.database.supabase_client,gitlab_stats.database.supabase_sync,gitlab_stats.gitlab_stats_api_ingester,gitlab_stats.jira_api_ingester)
 holidays (gitlab_stats.dashboard_utils.sections)
 numpy (gitlab_stats.dashboard_utils.charts)
 pandas (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.charts,gitlab_stats.dashboard_utils.helpers,gitlab_stats.dashboard_utils.sections,gitlab_stats.dashboard_utils.timeline_utils,gitlab_stats.jira_api_ingester)
@@ -48,7 +61,7 @@ streamlit (gitlab_stats.dashboard,gitlab_stats.dashboard_utils.helpers,gitlab_st
 
 
 
-4311 lines have been analyzed
+4869 lines have been analyzed
 
 Raw metrics
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -56,13 +69,13 @@ Raw metrics
 +----------+-------+------+---------+-----------+
 |type      |number |%     |
 +==========+=======+======+
-|code      |3101   |71.93 |
+|code      |3557   |73.05 |
 +----------+-------+------+
-|docstring |504    |11.69 |
+|docstring |564    |11.58 |
 +----------+-------+------+
-|comment   |16     |0.37  |
+|comment   |16     |0.33  |
 +----------+-------+------+
-|empty     |690    |16.01 |
+|empty     |732    |15.03 |
 +----------+-------+------+
 
 
@@ -88,7 +101,7 @@ Messages by category
 +===========+=======+
 |convention |0      |
 +-----------+-------+
-|refactor   |0      |
+|refactor   |8      |
 +-----------+-------+
 |warning    |0      |
 +-----------+-------+
@@ -97,15 +110,36 @@ Messages by category
 
 
 
+% errors / warnings by module
+#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
+
++----------------------------------------+------+--------+---------+-----------+
+|module                                  |error |warning |refactor |convention |
++========================================+======+========+=========+===========+
+|gitlab_stats.database.project_migration |0.00  |0.00    |87.50    |0.00       |
++----------------------------------------+------+--------+---------+-----------+
+|gitlab_stats.dashboard                  |0.00  |0.00    |12.50    |0.00       |
++----------------------------------------+------+--------+---------+-----------+
+
+
+
 Messages
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 
-+-----------+------------+
-|message id |occurrences |
-+===========+============+
++-----------------------------+------------+
+|message id                   |occurrences |
++=============================+============+
+|too-many-locals              |7           |
++-----------------------------+------------+
+|too-many-boolean-expressions |4           |
++-----------------------------+------------+
+|too-many-branches            |2           |
++-----------------------------+------------+
+|too-many-arguments           |2           |
++-----------------------------+------------+
 
 
 
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-Your code has been rated at 10.0
+Your code has been rated at 9.96

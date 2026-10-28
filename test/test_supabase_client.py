@@ -8,8 +8,47 @@ from urllib.error import URLError
 import pytest
 
 from gitlab_stats.database import supabase_client
+from gitlab_stats.project_privacy import project_alias
 
 # pylint: disable=protected-access
+
+
+def test_project_alias_is_deterministic_and_source_scoped():
+    """Use IDs consistently without depending on account or project name."""
+    assert project_alias("gitlab", 123) == project_alias("gitlab", "00123")
+    assert project_alias("gitlab", 123) == "gitlab-project-123"
+    assert project_alias("jira", "123") == "jira-project-123"
+    with pytest.raises(ValueError, match="numeric ID"):
+        project_alias("gitlab", "confidential-repo")
+
+
+@pytest.mark.parametrize("source", ["gitlab", "jira"])
+def test_upsert_rejects_private_labels_before_request(monkeypatch, source):
+    """Fail closed before sending private project labels to storage."""
+    monkeypatch.setattr(supabase_client, "_write_api_key", lambda: "test-key")
+    calls = []
+    monkeypatch.setattr(
+        supabase_client,
+        "_request_json",
+        lambda *args, **kwargs: calls.append(args),
+    )
+    writer = (
+        supabase_client.upsert_events_to_supabase
+        if source == "gitlab"
+        else supabase_client.upsert_jira_events_to_supabase
+    )
+    with pytest.raises(ValueError, match="Unsafe project alias"):
+        writer(
+            [
+                {
+                    "project": "confidential-repo",
+                    "event_type": "commits" if source == "gitlab" else "jira_comments",
+                    "event_date": "2026-03-01",
+                    "count": 1,
+                },
+            ],
+        )
+    assert calls == []
 
 
 class DummySettings:  # pylint: disable=too-few-public-methods
@@ -357,19 +396,19 @@ def test_upsert_events_to_supabase_aggregates_filters_and_batches(monkeypatch):
     records = [
         {
             "event_date": "2026-03-01",
-            "project": "proj-a",
+            "project": "gitlab-project-1",
             "event_type": "commits",
             "count": 2,
         },
         {
             "event_date": "2026-03-01",
-            "project": "proj-a",
+            "project": "gitlab-project-1",
             "event_type": "commits",
             "count": 3,
         },
         {
             "event_date": "2026-03-01",
-            "project": "proj-b",
+            "project": "gitlab-project-2",
             "event_type": "mr_opened",
             "count": 1,
         },
@@ -408,8 +447,8 @@ def test_upsert_events_to_supabase_aggregates_filters_and_batches(monkeypatch):
     assert sorted(
         (row["project"], row["event_type"], row["count"]) for row in flattened
     ) == [
-        ("proj-a", "commits", 5),
-        ("proj-b", "mr_opened", 1),
+        ("gitlab-project-1", "commits", 5),
+        ("gitlab-project-2", "mr_opened", 1),
     ]
 
 
@@ -465,7 +504,7 @@ def test_upsert_jira_events_to_supabase_uses_jira_table(monkeypatch):
     records = [
         {
             "event_date": "2026-03-01",
-            "project": "PROJ",
+            "project": "jira-project-34",
             "event_type": "jira_issues_closed",
             "count": 2,
         },

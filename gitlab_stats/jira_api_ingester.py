@@ -25,6 +25,7 @@ from gitlab_stats.dashboard_utils.timeline_utils import build_event_type_timelin
 from gitlab_stats.database.supabase_client import SupabaseConfigError
 from gitlab_stats.database.supabase_client import SupabaseRequestError
 from gitlab_stats.database.supabase_client import fetch_jira_events_from_supabase
+from gitlab_stats.project_privacy import project_alias
 from gitlab_stats.settings import read_setting
 
 if TYPE_CHECKING:
@@ -308,13 +309,11 @@ def _build_jira_metrics_from_rows(  # pylint: disable=too-many-locals
 
 
 def _extract_project_key(fields: dict[str, Any]) -> str:
-    """Extract project key from Jira issue fields."""
+    """Extract an ID alias without exposing Jira project keys or names."""
     project_obj = fields.get("project", {})
-    if not isinstance(project_obj, dict):
+    if not isinstance(project_obj, dict) or not project_obj:
         return ""
-    return str(
-        project_obj.get("key") or project_obj.get("name") or "",
-    ).strip()
+    return project_alias("jira", project_obj.get("id"))
 
 
 def _process_issue_dates(  # pylint: disable=too-many-arguments, too-many-positional-arguments
